@@ -30,6 +30,12 @@ export type LiteralValue =
   | null
   | undefined
 
+// `in` and `not in` operators require an array of values
+// the other operators require a single literal value
+export type ComparatorValue<T extends Comparator> = T extends `in` | `not in`
+  ? Array<LiteralValue>
+  : LiteralValue
+
 // These versions are for use with methods on the query builder where we want to
 // ensure that the argument is a string that does not start with "@".
 // Can be combined with PropertyReference for validating references.
