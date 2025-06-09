@@ -3,6 +3,7 @@ import type {
   InputReference,
   PropertyReference,
   PropertyReferenceString,
+  Schema,
   WildcardReferenceString,
 } from "./types.js"
 import type { Collection } from "../collection"
@@ -32,9 +33,12 @@ export type LiteralValue =
 
 // `in` and `not in` operators require an array of values
 // the other operators require a single literal value
-export type ComparatorValue<T extends Comparator> = T extends `in` | `not in`
+export type ComparatorValue<
+  T extends Comparator,
+  TContext extends Context<Schema>,
+> = T extends `in` | `not in`
   ? Array<LiteralValue>
-  : LiteralValue
+  : PropertyReferenceString<TContext> | LiteralValue
 
 // These versions are for use with methods on the query builder where we want to
 // ensure that the argument is a string that does not start with "@".

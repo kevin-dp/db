@@ -289,7 +289,7 @@ export class BaseQueryBuilder<TContext extends Context<Schema>> {
   where<T extends Comparator>(
     left: PropertyReferenceString<TContext> | LiteralValue,
     operator: T,
-    right: PropertyReferenceString<TContext> | ComparatorValue<T>
+    right: ComparatorValue<T, TContext>
   ): QueryBuilder<TContext>
 
   /**
