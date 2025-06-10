@@ -11,6 +11,7 @@ import type {
   OrderBy,
   Query,
   Select,
+  WhereCallback,
   WithQuery,
 } from "./schema.js"
 import type {
@@ -198,8 +199,9 @@ export class BaseQueryBuilder<TContext extends Context<Schema>> {
   /**
    * Specify what columns to select.
    * Overwrites any previous select clause.
+   * Also supports callback functions that receive the row context and return selected data.
    *
-   * @param selects The columns to select
+   * @param selects The columns to select (can include callbacks)
    * @returns A new QueryBuilder with the select clause set
    */
   select<TSelects extends Array<Select<TContext>>>(
@@ -298,16 +300,22 @@ export class BaseQueryBuilder<TContext extends Context<Schema>> {
   where(condition: Condition<TContext>): QueryBuilder<TContext>
 
   /**
+   * Add a where clause with a callback function.
+   */
+  where(callback: WhereCallback<TContext>): QueryBuilder<TContext>
+
+  /**
    * Add a where clause to filter the results.
    * Can be called multiple times to add AND conditions.
+   * Also supports callback functions that receive the row context.
    *
-   * @param leftOrCondition The left operand or complete condition
+   * @param leftOrConditionOrCallback The left operand, complete condition, or callback function
    * @param operator Optional comparison operator
    * @param right Optional right operand
    * @returns A new QueryBuilder with the where clause added
    */
   where(
-    leftOrCondition: any,
+    leftOrConditionOrCallback: any,
     operator?: any,
     right?: any
   ): QueryBuilder<TContext> {
@@ -318,22 +326,23 @@ export class BaseQueryBuilder<TContext extends Context<Schema>> {
 
     let condition: any
 
-    // Determine if this is a complete condition or individual parts
-    if (operator !== undefined && right !== undefined) {
+    // Determine if this is a callback, complete condition, or individual parts
+    if (typeof leftOrConditionOrCallback === `function`) {
+      // It's a callback function
+      condition = leftOrConditionOrCallback
+    } else if (operator !== undefined && right !== undefined) {
       // Create a condition from parts
-      condition = [leftOrCondition, operator, right]
+      condition = [leftOrConditionOrCallback, operator, right]
     } else {
       // Use the provided condition directly
-      condition = leftOrCondition
+      condition = leftOrConditionOrCallback
     }
 
+    // Where is always an array, so initialize or append
     if (!newBuilder.query.where) {
-      newBuilder.query.where = condition
+      newBuilder.query.where = [condition]
     } else {
-      // Create a composite condition with AND
-      // Use any to bypass type checking issues
-      const andArray: any = [newBuilder.query.where, `and`, condition]
-      newBuilder.query.where = andArray
+      newBuilder.query.where = [...newBuilder.query.where, condition]
     }
 
     return newBuilder as unknown as QueryBuilder<TContext>
@@ -356,16 +365,23 @@ export class BaseQueryBuilder<TContext extends Context<Schema>> {
   having(condition: Condition<TContext>): QueryBuilder<TContext>
 
   /**
+   * Add a having clause with a callback function.
+   * For filtering results after they have been grouped.
+   */
+  having(callback: WhereCallback<TContext>): QueryBuilder<TContext>
+
+  /**
    * Add a having clause to filter the grouped results.
    * Can be called multiple times to add AND conditions.
+   * Also supports callback functions that receive the row context.
    *
-   * @param leftOrCondition The left operand or complete condition
+   * @param leftOrConditionOrCallback The left operand, complete condition, or callback function
    * @param operator Optional comparison operator
    * @param right Optional right operand
    * @returns A new QueryBuilder with the having clause added
    */
   having(
-    leftOrCondition: any,
+    leftOrConditionOrCallback: any,
     operator?: any,
     right?: any
   ): QueryBuilder<TContext> {
@@ -375,22 +391,23 @@ export class BaseQueryBuilder<TContext extends Context<Schema>> {
 
     let condition: any
 
-    // Determine if this is a complete condition or individual parts
-    if (operator !== undefined && right !== undefined) {
+    // Determine if this is a callback, complete condition, or individual parts
+    if (typeof leftOrConditionOrCallback === `function`) {
+      // It's a callback function
+      condition = leftOrConditionOrCallback
+    } else if (operator !== undefined && right !== undefined) {
       // Create a condition from parts
-      condition = [leftOrCondition, operator, right]
+      condition = [leftOrConditionOrCallback, operator, right]
     } else {
       // Use the provided condition directly
-      condition = leftOrCondition
+      condition = leftOrConditionOrCallback
     }
 
+    // Having is always an array, so initialize or append
     if (!newBuilder.query.having) {
-      newBuilder.query.having = condition
+      newBuilder.query.having = [condition]
     } else {
-      // Create a composite condition with AND
-      // Use any to bypass type checking issues
-      const andArray: any = [newBuilder.query.having, `and`, condition]
-      newBuilder.query.having = andArray
+      newBuilder.query.having = [...newBuilder.query.having, condition]
     }
 
     return newBuilder as QueryBuilder<TContext>
@@ -439,6 +456,7 @@ export class BaseQueryBuilder<TContext extends Context<Schema>> {
               Input
           >
         }
+        hasJoin: true
       }
     >
   >
@@ -475,6 +493,7 @@ export class BaseQueryBuilder<TContext extends Context<Schema>> {
         schema: TContext[`schema`] & {
           [K in T]: RemoveIndexSignature<TContext[`baseSchema`][T]>
         }
+        hasJoin: true
       }
     >
   >
@@ -514,6 +533,7 @@ export class BaseQueryBuilder<TContext extends Context<Schema>> {
         schema: TContext[`schema`] & {
           [K in TAs]: RemoveIndexSignature<TContext[`baseSchema`][TFrom]>
         }
+        hasJoin: true
       }
     >
   >
@@ -756,25 +776,6 @@ export class BaseQueryBuilder<TContext extends Context<Schema>> {
   }
 
   /**
-   * Specify which column(s) to use as keys in the output keyed stream.
-   *
-   * @param keyBy The column(s) to use as keys
-   * @returns A new QueryBuilder with the keyBy clause set
-   */
-  keyBy(
-    keyBy: PropertyReference<TContext> | Array<PropertyReference<TContext>>
-  ): QueryBuilder<TContext> {
-    // Create a new builder with a copy of the current query
-    const newBuilder = new BaseQueryBuilder<TContext>()
-    Object.assign(newBuilder.query, this.query)
-
-    // Set the keyBy clause
-    newBuilder.query.keyBy = keyBy
-
-    return newBuilder as QueryBuilder<TContext>
-  }
-
-  /**
    * Add a groupBy clause to group the results by one or more columns.
    *
    * @param groupBy The column(s) to group by
@@ -884,10 +885,12 @@ export function queryBuilder<TBaseSchema extends Schema = {}>() {
 
 export type ResultsFromContext<TContext extends Context<Schema>> = Flatten<
   TContext[`result`] extends object
-    ? TContext[`result`]
-    : TContext[`result`] extends undefined
-      ? TContext[`schema`]
-      : object
+    ? TContext[`result`] // If there is a select we will have a result type
+    : TContext[`hasJoin`] extends true
+      ? TContext[`schema`] // If there is a join, the query returns the namespaced schema
+      : TContext[`default`] extends keyof TContext[`schema`]
+        ? TContext[`schema`][TContext[`default`]] // If there is no join we return the flat default schema
+        : never // Should never happen
 >
 
 export type ResultFromQueryBuilder<TQueryBuilder> = Flatten<

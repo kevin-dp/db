@@ -1,4 +1,4 @@
-import { evaluateOperandOnNestedRow } from "./extractors.js"
+import { evaluateOperandOnNamespacedRow } from "./extractors.js"
 import { compareValues, convertLikeToRegex, isValueInArray } from "./utils.js"
 import type {
   Comparator,
@@ -6,13 +6,41 @@ import type {
   ConditionOperand,
   LogicalOperator,
   SimpleCondition,
+  Where,
+  WhereCallback,
 } from "./schema.js"
+import type { NamespacedRow } from "../types.js"
+
+/**
+ * Evaluates a Where clause (which is always an array of conditions and/or callbacks) against a nested row structure
+ */
+export function evaluateWhereOnNamespacedRow(
+  namespacedRow: NamespacedRow,
+  where: Where,
+  mainTableAlias?: string,
+  joinedTableAlias?: string
+): boolean {
+  // Where is always an array of conditions and/or callbacks
+  // Evaluate all items and combine with AND logic
+  return where.every((item) => {
+    if (typeof item === `function`) {
+      return (item as WhereCallback)(namespacedRow)
+    } else {
+      return evaluateConditionOnNamespacedRow(
+        namespacedRow,
+        item as Condition,
+        mainTableAlias,
+        joinedTableAlias
+      )
+    }
+  })
+}
 
 /**
  * Evaluates a condition against a nested row structure
  */
-export function evaluateConditionOnNestedRow(
-  nestedRow: Record<string, unknown>,
+export function evaluateConditionOnNamespacedRow(
+  namespacedRow: NamespacedRow,
   condition: Condition,
   mainTableAlias?: string,
   joinedTableAlias?: string
@@ -20,8 +48,8 @@ export function evaluateConditionOnNestedRow(
   // Handle simple conditions with exactly 3 elements
   if (condition.length === 3 && !Array.isArray(condition[0])) {
     const [left, comparator, right] = condition as SimpleCondition
-    return evaluateSimpleConditionOnNestedRow(
-      nestedRow,
+    return evaluateSimpleConditionOnNamespacedRow(
+      namespacedRow,
       left,
       comparator,
       right,
@@ -38,8 +66,8 @@ export function evaluateConditionOnNestedRow(
     ![`and`, `or`].includes(condition[1] as string)
   ) {
     // Start with the first condition (first 3 elements)
-    let result = evaluateSimpleConditionOnNestedRow(
-      nestedRow,
+    let result = evaluateSimpleConditionOnNamespacedRow(
+      namespacedRow,
       condition[0],
       condition[1] as Comparator,
       condition[2],
@@ -53,8 +81,8 @@ export function evaluateConditionOnNestedRow(
 
       // Make sure we have a complete condition to evaluate
       if (i + 3 <= condition.length) {
-        const nextResult = evaluateSimpleConditionOnNestedRow(
-          nestedRow,
+        const nextResult = evaluateSimpleConditionOnNamespacedRow(
+          namespacedRow,
           condition[i + 1],
           condition[i + 2] as Comparator,
           condition[i + 3],
@@ -78,8 +106,8 @@ export function evaluateConditionOnNestedRow(
   // Handle nested composite conditions where the first element is an array
   if (condition.length > 0 && Array.isArray(condition[0])) {
     // Start with the first condition
-    let result = evaluateConditionOnNestedRow(
-      nestedRow,
+    let result = evaluateConditionOnNamespacedRow(
+      namespacedRow,
       condition[0] as Condition,
       mainTableAlias,
       joinedTableAlias
@@ -96,8 +124,8 @@ export function evaluateConditionOnNestedRow(
       if (operator === `and`) {
         result =
           result &&
-          evaluateConditionOnNestedRow(
-            nestedRow,
+          evaluateConditionOnNamespacedRow(
+            namespacedRow,
             nextCondition,
             mainTableAlias,
             joinedTableAlias
@@ -106,8 +134,8 @@ export function evaluateConditionOnNestedRow(
         // logicalOp === `or`
         result =
           result ||
-          evaluateConditionOnNestedRow(
-            nestedRow,
+          evaluateConditionOnNamespacedRow(
+            namespacedRow,
             nextCondition,
             mainTableAlias,
             joinedTableAlias
@@ -125,23 +153,23 @@ export function evaluateConditionOnNestedRow(
 /**
  * Evaluates a simple condition against a nested row structure
  */
-export function evaluateSimpleConditionOnNestedRow(
-  nestedRow: Record<string, unknown>,
+export function evaluateSimpleConditionOnNamespacedRow(
+  namespacedRow: Record<string, unknown>,
   left: ConditionOperand,
   comparator: Comparator,
   right: ConditionOperand,
   mainTableAlias?: string,
   joinedTableAlias?: string
 ): boolean {
-  const leftValue = evaluateOperandOnNestedRow(
-    nestedRow,
+  const leftValue = evaluateOperandOnNamespacedRow(
+    namespacedRow,
     left,
     mainTableAlias,
     joinedTableAlias
   )
 
-  const rightValue = evaluateOperandOnNestedRow(
-    nestedRow,
+  const rightValue = evaluateOperandOnNamespacedRow(
+    namespacedRow,
     right,
     mainTableAlias,
     joinedTableAlias

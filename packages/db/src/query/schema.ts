@@ -179,7 +179,6 @@ export interface JoinClause<TContext extends Context = Context> {
   from: string
   as?: string
   on: Condition<TContext>
-  where?: Condition<TContext>
 }
 
 // The orderBy clause can be a string, an object mapping a column to "asc" or "desc",
@@ -202,6 +201,11 @@ export type Select<TContext extends Context = Context> =
         | AggregateFunctionCall<TContext>
     }
   | WildcardReferenceString<TContext>
+  | SelectCallback<TContext>
+
+export type SelectCallback<TContext extends Context = Context> = (
+  context: TContext extends { schema: infer S } ? S : any
+) => any
 
 export type As<TContext extends Context = Context> = string
 
@@ -210,13 +214,20 @@ export type From<TContext extends Context = Context> = InputReference<{
   schema: TContext[`baseSchema`]
 }>
 
-export type Where<TContext extends Context = Context> = Condition<TContext>
+export type WhereCallback<TContext extends Context = Context> = (
+  context: TContext extends { schema: infer S } ? S : any
+) => boolean
+
+export type Where<TContext extends Context = Context> = Array<
+  Condition<TContext> | WhereCallback<TContext>
+>
+
+// Having is the same implementation as a where clause, its just run after the group by
+export type Having<TContext extends Context = Context> = Where<TContext>
 
 export type GroupBy<TContext extends Context = Context> =
   | PropertyReference<TContext>
   | Array<PropertyReference<TContext>>
-
-export type Having<TContext extends Context = Context> = Condition<TContext>
 
 export type Limit<TContext extends Context = Context> = number
 
@@ -227,13 +238,13 @@ export interface BaseQuery<TContext extends Context = Context> {
   // to expressions. Plain strings starting with "@" denote column references.
   // Plain string "@*" denotes all columns from all tables.
   // Plain string "@table.*" denotes all columns from a specific table.
-  select: Array<Select<TContext>>
+  select?: Array<Select<TContext>>
   as?: As<TContext>
   from: From<TContext>
   join?: Array<JoinClause<TContext>>
-  where?: Condition<TContext>
+  where?: Where<TContext>
   groupBy?: GroupBy<TContext>
-  having?: Condition<TContext>
+  having?: Having<TContext>
   orderBy?: OrderBy<TContext>
   limit?: Limit<TContext>
   offset?: Offset<TContext>
@@ -242,7 +253,6 @@ export interface BaseQuery<TContext extends Context = Context> {
 // The top-level query interface.
 export interface Query<TContext extends Context = Context>
   extends BaseQuery<TContext> {
-  keyBy?: PropertyReference<TContext> | Array<PropertyReference<TContext>>
   with?: Array<WithQuery<TContext>>
   collections?: {
     [K: string]: Collection<any>
@@ -255,11 +265,4 @@ export interface Query<TContext extends Context = Context>
 export interface WithQuery<TContext extends Context = Context>
   extends BaseQuery<TContext> {
   as: string
-}
-
-// A keyed query is a query that has a keyBy clause, and so the result is always
-// a keyed stream.
-export interface KeyedQuery<TContext extends Context = Context>
-  extends Query<TContext> {
-  keyBy: PropertyReference<TContext> | Array<PropertyReference<TContext>>
 }

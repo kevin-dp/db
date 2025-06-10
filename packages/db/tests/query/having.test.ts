@@ -104,11 +104,11 @@ describe(`Query - HAVING Clause`, () => {
     const query: Query<Context> = {
       select: [`@id`, `@name`, `@price`, `@category`],
       from: `products`,
-      having: [`@price`, `>`, 300] as Condition,
+      having: [[`@price`, `>`, 300] as Condition],
     }
 
     const graph = new D2({ initialFrontier: v([0, 0]) })
-    const input = graph.newInput<Product>()
+    const input = graph.newInput<[number, Product]>()
     const pipeline = compileQueryPipeline(query, { [query.from]: input })
 
     const messages: Array<Message<any>> = []
@@ -122,7 +122,7 @@ describe(`Query - HAVING Clause`, () => {
 
     input.sendData(
       v([1, 0]),
-      new MultiSet(sampleProducts.map((product) => [product, 1]))
+      new MultiSet(sampleProducts.map((product) => [[product.id, product], 1]))
     )
     input.sendFrontier(new Antichain([v([1, 0])]))
 
@@ -132,7 +132,7 @@ describe(`Query - HAVING Clause`, () => {
     const dataMessages = messages.filter((m) => m.type === MessageType.DATA)
     const results = dataMessages[0]!.data.collection
       .getInner()
-      .map(([data]) => data)
+      .map(([data]) => data[1])
 
     expect(results).toHaveLength(4)
     expect(results.every((p) => p.price > 300)).toBe(true)
@@ -147,12 +147,12 @@ describe(`Query - HAVING Clause`, () => {
     const query: Query<Context> = {
       select: [`@id`, `@name`, `@price`, `@category`, `@inStock`],
       from: `products`,
-      where: [`@inStock`, `=`, true] as Condition,
-      having: [`@price`, `>`, 200] as Condition,
+      where: [[`@inStock`, `=`, true] as Condition],
+      having: [[`@price`, `>`, 200] as Condition],
     }
 
     const graph = new D2({ initialFrontier: v([0, 0]) })
-    const input = graph.newInput<Product>()
+    const input = graph.newInput<[number, Product]>()
     const pipeline = compileQueryPipeline(query, { [query.from]: input })
 
     const messages: Array<Message<any>> = []
@@ -166,7 +166,7 @@ describe(`Query - HAVING Clause`, () => {
 
     input.sendData(
       v([1, 0]),
-      new MultiSet(sampleProducts.map((product) => [product, 1]))
+      new MultiSet(sampleProducts.map((product) => [[product.id, product], 1]))
     )
     input.sendFrontier(new Antichain([v([1, 0])]))
 
@@ -176,7 +176,7 @@ describe(`Query - HAVING Clause`, () => {
     const dataMessages = messages.filter((m) => m.type === MessageType.DATA)
     const results = dataMessages[0]!.data.collection
       .getInner()
-      .map(([data]) => data)
+      .map(([data]) => data[1])
 
     expect(results).toHaveLength(3)
     expect(results.every((p) => p.inStock === true)).toBe(true)
@@ -192,16 +192,18 @@ describe(`Query - HAVING Clause`, () => {
       select: [`@id`, `@name`, `@price`, `@category`, `@rating`],
       from: `products`,
       having: [
-        [`@price`, `>`, 100],
-        `and`,
-        [`@price`, `<`, 600],
-        `and`,
-        [`@rating`, `>=`, 4.0],
-      ] as unknown as Condition,
+        [
+          [`@price`, `>`, 100],
+          `and`,
+          [`@price`, `<`, 600],
+          `and`,
+          [`@rating`, `>=`, 4.0],
+        ] as unknown as Condition,
+      ],
     }
 
     const graph = new D2({ initialFrontier: v([0, 0]) })
-    const input = graph.newInput<Product>()
+    const input = graph.newInput<[number, Product]>()
     const pipeline = compileQueryPipeline(query, { [query.from]: input })
 
     const messages: Array<Message<any>> = []
@@ -215,7 +217,7 @@ describe(`Query - HAVING Clause`, () => {
 
     input.sendData(
       v([1, 0]),
-      new MultiSet(sampleProducts.map((product) => [product, 1]))
+      new MultiSet(sampleProducts.map((product) => [[product.id, product], 1]))
     )
     input.sendFrontier(new Antichain([v([1, 0])]))
 
@@ -225,7 +227,7 @@ describe(`Query - HAVING Clause`, () => {
     const dataMessages = messages.filter((m) => m.type === MessageType.DATA)
     const results = dataMessages[0]!.data.collection
       .getInner()
-      .map(([data]) => data)
+      .map(([data]) => data[1])
 
     expect(results).toHaveLength(2)
 
@@ -248,14 +250,16 @@ describe(`Query - HAVING Clause`, () => {
       select: [`@id`, `@name`, `@price`, `@category`, `@inStock`],
       from: `products`,
       having: [
-        [[`@category`, `=`, `Electronics`], `and`, [`@price`, `<`, 600]],
-        `or`,
-        [[`@category`, `=`, `Furniture`], `and`, [`@inStock`, `=`, true]],
-      ] as unknown as Condition,
+        [
+          [[`@category`, `=`, `Electronics`], `and`, [`@price`, `<`, 600]],
+          `or`,
+          [[`@category`, `=`, `Furniture`], `and`, [`@inStock`, `=`, true]],
+        ] as unknown as Condition,
+      ],
     }
 
     const graph = new D2({ initialFrontier: v([0, 0]) })
-    const input = graph.newInput<Product>()
+    const input = graph.newInput<[number, Product]>()
     const pipeline = compileQueryPipeline(query, { [query.from]: input })
 
     const messages: Array<Message<any>> = []
@@ -269,7 +273,7 @@ describe(`Query - HAVING Clause`, () => {
 
     input.sendData(
       v([1, 0]),
-      new MultiSet(sampleProducts.map((product) => [product, 1]))
+      new MultiSet(sampleProducts.map((product) => [[product.id, product], 1]))
     )
     input.sendFrontier(new Antichain([v([1, 0])]))
 
@@ -279,7 +283,7 @@ describe(`Query - HAVING Clause`, () => {
     const dataMessages = messages.filter((m) => m.type === MessageType.DATA)
     const results = dataMessages[0]!.data.collection
       .getInner()
-      .map(([data]) => data)
+      .map(([data]) => data[1])
 
     // Expected: inexpensive electronics or in-stock furniture
     expect(results).toHaveLength(3)
