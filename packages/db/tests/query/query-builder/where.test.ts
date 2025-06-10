@@ -69,7 +69,7 @@ describe(`QueryBuilder.where`, () => {
         .where(`@id`, op, [1, 2, 3])
 
       const builtQuery = query._query
-      expect(builtQuery.where).toEqual([[`@id`, op, [1, 2, 3]]])
+      expect(builtQuery.where).toEqual([`@id`, op, [1, 2, 3]])
     }
   })
 
