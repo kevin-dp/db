@@ -1,6 +1,7 @@
 import { createDeferred } from "./deferred"
 import type { Deferred } from "./deferred"
 import type {
+  MutationFn,
   PendingMutation,
   TransactionConfig,
   TransactionState,
@@ -24,8 +25,8 @@ function generateUUID() {
   })
 }
 
-const transactions: Array<Transaction> = []
-let transactionStack: Array<Transaction> = []
+const transactions: Array<Transaction<any>> = []
+let transactionStack: Array<Transaction<any>> = []
 
 export function createTransaction(config: TransactionConfig): Transaction {
   if (typeof config.mutationFn === `undefined`) {
@@ -51,27 +52,27 @@ export function getActiveTransaction(): Transaction | undefined {
   }
 }
 
-function registerTransaction(tx: Transaction) {
+function registerTransaction(tx: Transaction<any>) {
   transactionStack.push(tx)
 }
 
-function unregisterTransaction(tx: Transaction) {
+function unregisterTransaction(tx: Transaction<any>) {
   transactionStack = transactionStack.filter((t) => t.id !== tx.id)
 }
 
-function removeFromPendingList(tx: Transaction) {
+function removeFromPendingList(tx: Transaction<any>) {
   const index = transactions.findIndex((t) => t.id === tx.id)
   if (index !== -1) {
     transactions.splice(index, 1)
   }
 }
 
-export class Transaction {
+export class Transaction<T extends object = Record<string, unknown>> {
   public id: string
   public state: TransactionState
-  public mutationFn
-  public mutations: Array<PendingMutation<any>>
-  public isPersisted: Deferred<Transaction>
+  public mutationFn: MutationFn<T>
+  public mutations: Array<PendingMutation<T>>
+  public isPersisted: Deferred<Transaction<T>>
   public autoCommit: boolean
   public createdAt: Date
   public metadata: Record<string, unknown>
@@ -80,12 +81,12 @@ export class Transaction {
     error: Error
   }
 
-  constructor(config: TransactionConfig) {
+  constructor(config: TransactionConfig<T>) {
     this.id = config.id!
     this.mutationFn = config.mutationFn
     this.state = `pending`
     this.mutations = []
-    this.isPersisted = createDeferred()
+    this.isPersisted = createDeferred<Transaction<T>>()
     this.autoCommit = config.autoCommit ?? true
     this.createdAt = new Date()
     this.metadata = config.metadata ?? {}
@@ -99,7 +100,7 @@ export class Transaction {
     }
   }
 
-  mutate(callback: () => void): Transaction {
+  mutate(callback: () => void): Transaction<T> {
     if (this.state !== `pending`) {
       throw `You can no longer call .mutate() as the transaction is no longer pending`
     }
@@ -121,7 +122,7 @@ export class Transaction {
   applyMutations(mutations: Array<PendingMutation<any>>): void {
     for (const newMutation of mutations) {
       const existingIndex = this.mutations.findIndex(
-        (m) => m.key === newMutation.key
+        (m) => m.globalKey === newMutation.globalKey
       )
 
       if (existingIndex >= 0) {
@@ -134,7 +135,7 @@ export class Transaction {
     }
   }
 
-  rollback(config?: { isSecondaryRollback?: boolean }): Transaction {
+  rollback(config?: { isSecondaryRollback?: boolean }): Transaction<T> {
     const isSecondaryRollback = config?.isSecondaryRollback ?? false
     if (this.state === `completed`) {
       throw `You can no longer call .rollback() as the transaction is already completed`
@@ -146,10 +147,10 @@ export class Transaction {
     // and roll them back as well.
     if (!isSecondaryRollback) {
       const mutationIds = new Set()
-      this.mutations.forEach((m) => mutationIds.add(m.key))
+      this.mutations.forEach((m) => mutationIds.add(m.globalKey))
       for (const t of transactions) {
         t.state === `pending` &&
-          t.mutations.some((m) => mutationIds.has(m.key)) &&
+          t.mutations.some((m) => mutationIds.has(m.globalKey)) &&
           t.rollback({ isSecondaryRollback: true })
       }
     }
@@ -166,14 +167,14 @@ export class Transaction {
     const hasCalled = new Set()
     for (const mutation of this.mutations) {
       if (!hasCalled.has(mutation.collection.id)) {
-        mutation.collection.transactions.setState((state) => state)
+        mutation.collection.onTransactionStateChange()
         mutation.collection.commitPendingTransactions()
         hasCalled.add(mutation.collection.id)
       }
     }
   }
 
-  async commit(): Promise<Transaction> {
+  async commit(): Promise<Transaction<T>> {
     if (this.state !== `pending`) {
       throw `You can no longer call .commit() as the transaction is no longer pending`
     }
@@ -189,10 +190,11 @@ export class Transaction {
     // Run mutationFn
     try {
       // At this point we know there's at least one mutation
-      // Use type assertion to tell TypeScript about this guarantee
-      const transactionWithMutations =
-        this as unknown as TransactionWithMutations
-      await this.mutationFn({ transaction: transactionWithMutations })
+      // We've already verified mutations is non-empty, so this cast is safe
+      // Use a direct type assertion instead of object spreading to preserve the original type
+      await this.mutationFn({
+        transaction: this as unknown as TransactionWithMutations<T>,
+      })
 
       this.setState(`completed`)
       this.touchCollection()

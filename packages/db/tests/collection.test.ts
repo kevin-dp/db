@@ -1,25 +1,21 @@
 import { describe, expect, it, vi } from "vitest"
 import mitt from "mitt"
 import { z } from "zod"
-import { Collection, SchemaValidationError } from "../src/collection"
+import { SchemaValidationError, createCollection } from "../src/collection"
 import { createTransaction } from "../src/transactions"
-import type {
-  ChangeMessage,
-  MutationFn,
-  OptimisticChangeMessage,
-  PendingMutation,
-} from "../src/types"
+import type { ChangeMessage, MutationFn, PendingMutation } from "../src/types"
 
 describe(`Collection`, () => {
   it(`should throw if there's no sync config`, () => {
-    expect(() => new Collection()).toThrow(`Collection requires a config`)
+    // @ts-expect-error we're testing for throwing when there's no config passed in
+    expect(() => createCollection()).toThrow(`Collection requires a config`)
   })
 
   it(`should throw an error when trying to use mutation operations outside of a transaction`, async () => {
     // Create a collection with sync but no mutationFn
-    const collection = new Collection<{ value: string }>({
+    const collection = createCollection<{ value: string }>({
       id: `foo`,
-      getId: (item) => item.value,
+      getKey: (item) => item.value,
       sync: {
         sync: ({ begin, write, commit }) => {
           // Immediately execute the sync cycle
@@ -66,9 +62,9 @@ describe(`Collection`, () => {
   })
 
   it(`should throw an error when trying to update an item's ID`, async () => {
-    const collection = new Collection<{ id: string; value: string }>({
+    const collection = createCollection<{ id: string; value: string }>({
       id: `id-update-test`,
-      getId: (item) => item.id,
+      getKey: (item) => item.id,
       sync: {
         sync: ({ begin, write, commit }) => {
           begin()
@@ -97,15 +93,15 @@ describe(`Collection`, () => {
         })
       })
     }).toThrow(
-      `Updating the ID of an item is not allowed. Original ID: "item-1", Attempted new ID: "item-2". Please delete the old item and create a new one if an ID change is necessary.`
+      `Updating the key of an item is not allowed. Original key: "item-1", Attempted new key: "item-2". Please delete the old item and create a new one if a key change is necessary.`
     )
   })
 
   it(`It shouldn't expose any state until the initial sync is finished`, () => {
     // Create a collection with a mock sync plugin
-    new Collection<{ name: string }>({
+    createCollection<{ name: string }>({
       id: `foo`,
-      getId: (item) => item.name,
+      getKey: (item) => item.name,
       sync: {
         sync: ({ collection, begin, write, commit }) => {
           // Initial state should be empty
@@ -146,14 +142,14 @@ describe(`Collection`, () => {
     const syncMock = vi.fn()
 
     // new collection w/ mock sync/mutation
-    const collection = new Collection<{
+    const collection = createCollection<{
       id: number
       value: string
       boolean?: boolean
       newProp?: string
     }>({
       id: `mock`,
-      getId: (item) => item.id,
+      getKey: (item) => item.id,
       sync: {
         sync: ({ begin, write, commit }) => {
           // @ts-expect-error don't trust mitt's typing
@@ -205,7 +201,7 @@ describe(`Collection`, () => {
     tx.mutate(() => collection.insert(data))
 
     // @ts-expect-error possibly undefined is ok in test
-    const insertedKey = tx.mutations[0].key
+    const insertedKey = tx.mutations[0].key as string
 
     // The merged value should immediately contain the new insert
     expect(collection.state).toEqual(
@@ -222,13 +218,12 @@ describe(`Collection`, () => {
     })
 
     // Check the optimistic operation is there
-    const insertOperation: OptimisticChangeMessage = {
-      key: insertedKey,
-      value: { id: 1, value: `bar` },
-      type: `insert`,
-      isActive: true,
-    }
-    expect(collection.optimisticOperations.state[0]).toEqual(insertOperation)
+    const insertKey = 1
+    expect(collection.derivedUpserts.has(insertKey)).toBe(true)
+    expect(collection.derivedUpserts.get(insertKey)).toEqual({
+      id: 1,
+      value: `bar`,
+    })
 
     // Check persist data (moved outside the persist callback)
     // @ts-expect-error possibly undefined is ok in test
@@ -261,19 +256,20 @@ describe(`Collection`, () => {
     // optimistic update is gone & synced data & comibned state are all updated.
     expect(
       // @ts-expect-error possibly undefined is ok in test
-      Array.from(collection.transactions.state.values())[0].state
-    ).toMatchInlineSnapshot(`"completed"`)
+      Array.from(collection.transactions.values())[0].mutations[0].changes
+    ).toEqual({
+      id: 1,
+      value: `bar`,
+    })
     expect(collection.state).toEqual(
       new Map([[insertedKey, { id: 1, value: `bar` }]])
     )
-    expect(
-      collection.optimisticOperations.state.filter((o) => o.isActive)
-    ).toEqual([])
+    expect(collection.derivedUpserts.size).toEqual(0)
 
     // Test insert with provided key
     const tx2 = createTransaction({ mutationFn })
     tx2.mutate(() => collection.insert({ id: 2, value: `baz` }))
-    expect(collection.state.get(collection.generateObjectKey(2))).toEqual({
+    expect(collection.state.get(2)).toEqual({
       id: 2,
       value: `baz`,
     })
@@ -415,7 +411,7 @@ describe(`Collection`, () => {
 
     // Test bulk delete
     const tx9 = createTransaction({ mutationFn })
-    tx9.mutate(() => collection.delete([keys[2], keys[3]]))
+    tx9.mutate(() => collection.delete([keys[2]!, keys[3]!]))
     // @ts-expect-error possibly undefined is ok in test
     expect(collection.state.has(keys[2])).toBe(false)
     // @ts-expect-error possibly undefined is ok in test
@@ -427,9 +423,9 @@ describe(`Collection`, () => {
     const emitter = mitt()
 
     // new collection w/ mock sync/mutation
-    const collection = new Collection<{ id: number; value: string }>({
+    const collection = createCollection<{ id: number; value: string }>({
       id: `mock`,
-      getId: (item) => {
+      getKey: (item) => {
         return item.id
       },
       sync: {
@@ -457,9 +453,7 @@ describe(`Collection`, () => {
         // This update is ignored because the optimistic update overrides it.
         { type: `insert`, changes: { id: 2, bar: `value2` } },
       ])
-      expect(collection.state).toEqual(
-        new Map([[`KEY::${collection.id}/1`, { id: 1, value: `bar` }]])
-      )
+      expect(collection.state).toEqual(new Map([[1, { id: 1, value: `bar` }]]))
       // Remove it so we don't have to assert against it below
       emitter.emit(`update`, [{ changes: { id: 2 }, type: `delete` }])
 
@@ -478,39 +472,34 @@ describe(`Collection`, () => {
     )
 
     // The merged value should immediately contain the new insert
-    expect(collection.state).toEqual(
-      new Map([[`KEY::${collection.id}/1`, { id: 1, value: `bar` }]])
-    )
+    expect(collection.state).toEqual(new Map([[1, { id: 1, value: `bar` }]]))
 
     // check there's a transaction in peristing state
     expect(
       // @ts-expect-error possibly undefined is ok in test
-      Array.from(collection.transactions.state.values())[0].mutations[0].changes
+      Array.from(collection.transactions.values())[0].mutations[0].changes
     ).toEqual({
       id: 1,
       value: `bar`,
     })
 
     // Check the optimistic operation is there
-    const insertOperation: OptimisticChangeMessage = {
-      key: `KEY::${collection.id}/1`,
-      value: { id: 1, value: `bar` },
-      type: `insert`,
-      isActive: true,
-    }
-    expect(collection.optimisticOperations.state[0]).toEqual(insertOperation)
+    const insertKey = 1
+    expect(collection.derivedUpserts.has(insertKey)).toBe(true)
+    expect(collection.derivedUpserts.get(insertKey)).toEqual({
+      id: 1,
+      value: `bar`,
+    })
 
     await tx1.isPersisted.promise
 
-    expect(collection.state).toEqual(
-      new Map([[`KEY::${collection.id}/1`, { id: 1, value: `bar` }]])
-    )
+    expect(collection.state).toEqual(new Map([[1, { id: 1, value: `bar` }]]))
   })
 
   it(`should throw errors when deleting items not in the collection`, () => {
-    const collection = new Collection<{ name: string }>({
+    const collection = createCollection<{ name: string }>({
       id: `delete-errors`,
-      getId: (val) => val.name,
+      getKey: (val) => val.name,
       sync: {
         sync: ({ begin, commit }) => {
           begin()
@@ -532,9 +521,6 @@ describe(`Collection`, () => {
       tx2.mutate(() => collection.delete(`non-existent-id`))
     ).not.toThrow()
 
-    // Should throw when trying to delete an invalid type
-    const tx3 = createTransaction({ mutationFn })
-
     // Should not throw when deleting by string key (even if key doesn't exist)
     const tx4 = createTransaction({ mutationFn })
     expect(() =>
@@ -549,9 +535,9 @@ describe(`Collection`, () => {
   })
 
   it(`should not allow inserting documents with IDs that already exist`, async () => {
-    const collection = new Collection<{ id: number; value: string }>({
+    const collection = createCollection<{ id: number; value: string }>({
       id: `duplicate-id-test`,
-      getId: (item) => item.id,
+      getKey: (item) => item.id,
       sync: {
         sync: ({ begin, write, commit }) => {
           begin()
@@ -590,9 +576,9 @@ describe(`Collection`, () => {
     const onDeleteMock = vi.fn()
 
     // Create a collection with handler functions
-    const collection = new Collection<{ id: number; value: string }>({
+    const collection = createCollection<{ id: number; value: string }>({
       id: `handlers-test`,
-      getId: (item) => item.id,
+      getKey: (item) => item.id,
       sync: {
         sync: ({ begin, write, commit }) => {
           begin()
@@ -626,7 +612,7 @@ describe(`Collection`, () => {
     )
 
     // Test delete handler
-    tx.mutate(() => collection.delete(1))
+    tx.mutate(() => collection.delete(`1`)) // Convert number to string to match expected type
 
     // Verify the handler functions were defined correctly
     // We're not testing actual invocation since that would require modifying the Collection class
@@ -637,26 +623,26 @@ describe(`Collection`, () => {
 
   it(`should execute operations outside of explicit transactions using handlers`, async () => {
     // Create handler functions that resolve after a short delay to simulate async operations
-    const onInsertMock = vi.fn().mockImplementation(async (tx) => {
+    const onInsertMock = vi.fn().mockImplementation(async () => {
       // Wait a bit to simulate an async operation
       await new Promise((resolve) => setTimeout(resolve, 10))
       return { success: true, operation: `insert` }
     })
 
-    const onUpdateMock = vi.fn().mockImplementation(async (tx) => {
+    const onUpdateMock = vi.fn().mockImplementation(async () => {
       await new Promise((resolve) => setTimeout(resolve, 10))
       return { success: true, operation: `update` }
     })
 
-    const onDeleteMock = vi.fn().mockImplementation(async (tx) => {
+    const onDeleteMock = vi.fn().mockImplementation(async () => {
       await new Promise((resolve) => setTimeout(resolve, 10))
       return { success: true, operation: `delete` }
     })
 
     // Create a collection with handler functions
-    const collection = new Collection<{ id: number; value: string }>({
+    const collection = createCollection<{ id: number; value: string }>({
       id: `direct-operations-test`,
-      getId: (item) => item.id,
+      getKey: (item) => item.id,
       sync: {
         sync: ({ begin, write, commit }) => {
           begin()
@@ -688,7 +674,7 @@ describe(`Collection`, () => {
     expect(onUpdateMock).toHaveBeenCalledTimes(1)
 
     // Test direct delete operation
-    const deleteTx = collection.delete(1)
+    const deleteTx = collection.delete(`1`) // Convert number to string to match expected type
     expect(deleteTx).toBeDefined()
     expect(onDeleteMock).toHaveBeenCalledTimes(1)
 
@@ -707,9 +693,9 @@ describe(`Collection`, () => {
 
   it(`should throw errors when operations are called outside transactions without handlers`, async () => {
     // Create a collection without handler functions
-    const collection = new Collection<{ id: number; value: string }>({
+    const collection = createCollection<{ id: number; value: string }>({
       id: `no-handlers-test`,
-      getId: (item) => item.id,
+      getKey: (item) => item.id,
       sync: {
         sync: ({ begin, write, commit }) => {
           begin()
@@ -743,7 +729,7 @@ describe(`Collection`, () => {
 
     // Test delete without handler
     expect(() => {
-      collection.delete(1)
+      collection.delete(`1`) // Convert number to string to match expected type
     }).toThrow(
       `Collection.delete called directly (not within an explicit transaction) but no 'onDelete' handler is configured.`
     )
@@ -760,9 +746,9 @@ describe(`Collection with schema validation`, () => {
     })
 
     // Create a collection with the schema
-    const collection = new Collection<z.infer<typeof userSchema>>({
+    const collection = createCollection<z.infer<typeof userSchema>>({
       id: `test`,
-      getId: (item) => item.name,
+      getKey: (item) => item.name,
       sync: {
         sync: ({ begin, commit }) => {
           begin()

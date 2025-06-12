@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 import mitt from "mitt"
 import { act, renderHook } from "@testing-library/react"
-import { Collection, createTransaction } from "@tanstack/db"
+import { createCollection, createTransaction } from "@tanstack/db"
 import { useEffect } from "react"
 import { useLiveQuery } from "../src/useLiveQuery"
 import type {
@@ -80,9 +80,9 @@ describe(`Query Collections`, () => {
     const emitter = mitt()
 
     // Create collection with mutation capability
-    const collection = new Collection<Person>({
+    const collection = createCollection<Person>({
       id: `optimistic-changes-test`,
-      getId: (item) => item.id,
+      getKey: (item) => item.id,
       sync: {
         sync: ({ begin, write, commit }) => {
           // Listen for sync events
@@ -122,9 +122,7 @@ describe(`Query Collections`, () => {
     })
 
     expect(result.current.state.size).toBe(1)
-    expect(
-      result.current.state.get(`KEY::${result.current.collection.id}/3`)
-    ).toEqual({
+    expect(result.current.state.get(`3`)).toEqual({
       _key: `3`,
       _orderByIndex: 0,
       id: `3`,
@@ -158,17 +156,13 @@ describe(`Query Collections`, () => {
     await waitForChanges()
 
     expect(result.current.state.size).toBe(2)
-    expect(
-      result.current.state.get(`KEY::${result.current.collection.id}/3`)
-    ).toEqual({
+    expect(result.current.state.get(`3`)).toEqual({
       _key: `3`,
       _orderByIndex: 0,
       id: `3`,
       name: `John Smith`,
     })
-    expect(
-      result.current.state.get(`KEY::${result.current.collection.id}/4`)
-    ).toEqual({
+    expect(result.current.state.get(`4`)).toEqual({
       _key: `4`,
       _orderByIndex: 1,
       id: `4`,
@@ -205,9 +199,7 @@ describe(`Query Collections`, () => {
     await waitForChanges()
 
     expect(result.current.state.size).toBe(2)
-    expect(
-      result.current.state.get(`KEY::${result.current.collection.id}/4`)
-    ).toEqual({
+    expect(result.current.state.get(`4`)).toEqual({
       _key: `4`,
       _orderByIndex: 1,
       id: `4`,
@@ -228,7 +220,7 @@ describe(`Query Collections`, () => {
         {
           type: `delete`,
           changes: {
-            id: 4,
+            id: `4`,
           },
         },
       ])
@@ -252,9 +244,9 @@ describe(`Query Collections`, () => {
     const emitter = mitt()
 
     // Create person collection
-    const personCollection = new Collection<Person>({
+    const personCollection = createCollection<Person>({
       id: `person-collection-test`,
-      getId: (item) => item.id,
+      getKey: (item) => item.id,
       sync: {
         sync: ({ begin, write, commit }) => {
           emitter.on(`sync-person`, (changes) => {
@@ -272,9 +264,9 @@ describe(`Query Collections`, () => {
     })
 
     // Create issue collection
-    const issueCollection = new Collection<Issue>({
+    const issueCollection = createCollection<Issue>({
       id: `issue-collection-test`,
-      getId: (item) => item.id,
+      getKey: (item) => item.id,
       sync: {
         sync: ({ begin, write, commit }) => {
           emitter.on(`sync-issue`, (changes) => {
@@ -333,27 +325,21 @@ describe(`Query Collections`, () => {
     // Verify that we have the expected joined results
     expect(result.current.state.size).toBe(3)
 
-    expect(
-      result.current.state.get(`KEY::${result.current.collection.id}/[1,1]`)
-    ).toEqual({
+    expect(result.current.state.get(`[1,1]`)).toEqual({
       _key: `[1,1]`,
       id: `1`,
       name: `John Doe`,
       title: `Issue 1`,
     })
 
-    expect(
-      result.current.state.get(`KEY::${result.current.collection.id}/[2,2]`)
-    ).toEqual({
+    expect(result.current.state.get(`[2,2]`)).toEqual({
       _key: `[2,2]`,
       id: `2`,
       name: `Jane Doe`,
       title: `Issue 2`,
     })
 
-    expect(
-      result.current.state.get(`KEY::${result.current.collection.id}/[3,1]`)
-    ).toEqual({
+    expect(result.current.state.get(`[3,1]`)).toEqual({
       _key: `[3,1]`,
       id: `3`,
       name: `John Doe`,
@@ -379,9 +365,7 @@ describe(`Query Collections`, () => {
     await waitForChanges()
 
     expect(result.current.state.size).toBe(4)
-    expect(
-      result.current.state.get(`KEY::${result.current.collection.id}/[4,2]`)
-    ).toEqual({
+    expect(result.current.state.get(`[4,2]`)).toEqual({
       _key: `[4,2]`,
       id: `4`,
       name: `Jane Doe`,
@@ -394,7 +378,7 @@ describe(`Query Collections`, () => {
         {
           type: `update`,
           changes: {
-            id: 2,
+            id: `2`,
             title: `Updated Issue 2`,
           },
         },
@@ -404,11 +388,9 @@ describe(`Query Collections`, () => {
     await waitForChanges()
 
     // The updated title should be reflected in the joined results
-    expect(
-      result.current.state.get(`KEY::${result.current.collection.id}/[2,2]`)
-    ).toEqual({
+    expect(result.current.state.get(`[2,2]`)).toEqual({
       _key: `[2,2]`,
-      id: 2,
+      id: `2`,
       name: `Jane Doe`,
       title: `Updated Issue 2`,
     })
@@ -418,7 +400,7 @@ describe(`Query Collections`, () => {
       emitter.emit(`sync-issue`, [
         {
           type: `delete`,
-          changes: { id: 3 },
+          changes: { id: `3` },
         },
       ])
     })
@@ -426,18 +408,16 @@ describe(`Query Collections`, () => {
     await waitForChanges()
 
     // After deletion, user 3 should no longer have a joined result
-    expect(
-      result.current.state.get(`KEY::${result.current.collection.id}/[3,1]`)
-    ).toBeUndefined()
+    expect(result.current.state.get(`[3,1]`)).toBeUndefined()
   })
 
   it(`should recompile query when parameters change and change results`, async () => {
     const emitter = mitt()
 
     // Create collection with mutation capability
-    const collection = new Collection<Person>({
+    const collection = createCollection<Person>({
       id: `params-change-test`,
-      getId: (item) => item.id,
+      getKey: (item) => item.id,
       sync: {
         sync: ({ begin, write, commit }) => {
           // Listen for sync events
@@ -483,9 +463,7 @@ describe(`Query Collections`, () => {
 
     // Initially should return only people older than 30
     expect(result.current.state.size).toBe(1)
-    expect(
-      result.current.state.get(`KEY::${result.current.collection.id}/3`)
-    ).toEqual({
+    expect(result.current.state.get(`3`)).toEqual({
       _key: `3`,
       id: `3`,
       name: `John Smith`,
@@ -501,25 +479,19 @@ describe(`Query Collections`, () => {
 
     // Now should return all people as they're all older than 20
     expect(result.current.state.size).toBe(3)
-    expect(
-      result.current.state.get(`KEY::${result.current.collection.id}/1`)
-    ).toEqual({
+    expect(result.current.state.get(`1`)).toEqual({
       _key: `1`,
       id: `1`,
       name: `John Doe`,
       age: 30,
     })
-    expect(
-      result.current.state.get(`KEY::${result.current.collection.id}/2`)
-    ).toEqual({
+    expect(result.current.state.get(`2`)).toEqual({
       _key: `2`,
       id: `2`,
       name: `Jane Doe`,
       age: 25,
     })
-    expect(
-      result.current.state.get(`KEY::${result.current.collection.id}/3`)
-    ).toEqual({
+    expect(result.current.state.get(`3`)).toEqual({
       _key: `3`,
       id: `3`,
       name: `John Smith`,
@@ -541,9 +513,9 @@ describe(`Query Collections`, () => {
     const emitter = mitt()
 
     // Create collection with mutation capability
-    const collection = new Collection<Person>({
+    const collection = createCollection<Person>({
       id: `stop-query-test`,
-      getId: (item) => item.id,
+      getKey: (item) => item.id,
       sync: {
         sync: ({ begin, write, commit }) => {
           emitter.on(`sync`, (changes) => {
@@ -643,9 +615,9 @@ describe(`Query Collections`, () => {
     const emitter = mitt()
 
     // Create collection with mutation capability
-    const collection = new Collection<Person>({
+    const collection = createCollection<Person>({
       id: `optimistic-changes-test`,
-      getId: (item) => item.id,
+      getKey: (item) => item.id,
       sync: {
         sync: ({ begin, write, commit }) => {
           // Listen for sync events
@@ -697,11 +669,7 @@ describe(`Query Collections`, () => {
 
     // Verify initial grouped results
     expect(groupedResult.current.state.size).toBe(1)
-    expect(
-      groupedResult.current.state.get(
-        `KEY::${groupedResult.current.collection.id}/{"team":"team1"}`
-      )
-    ).toEqual({
+    expect(groupedResult.current.state.get(`{"team":"team1"}`)).toEqual({
       _key: `{"team":"team1"}`,
       team: `team1`,
       count: 1,
@@ -741,20 +709,12 @@ describe(`Query Collections`, () => {
 
     // Verify the grouped results include the new team members
     expect(groupedResult.current.state.size).toBe(2)
-    expect(
-      groupedResult.current.state.get(
-        `KEY::${groupedResult.current.collection.id}/{"team":"team1"}`
-      )
-    ).toEqual({
+    expect(groupedResult.current.state.get(`{"team":"team1"}`)).toEqual({
       _key: `{"team":"team1"}`,
       team: `team1`,
       count: 2,
     })
-    expect(
-      groupedResult.current.state.get(
-        `KEY::${groupedResult.current.collection.id}/{"team":"team2"}`
-      )
-    ).toEqual({
+    expect(groupedResult.current.state.get(`{"team":"team2"}`)).toEqual({
       _key: `{"team":"team2"}`,
       team: `team2`,
       count: 1,
@@ -772,9 +732,9 @@ describe(`Query Collections`, () => {
     }> = []
 
     // Create person collection
-    const personCollection = new Collection<Person>({
+    const personCollection = createCollection<Person>({
       id: `person-collection-test-bug`,
-      getId: (item) => item.id,
+      getKey: (item) => item.id,
       sync: {
         sync: ({ begin, write, commit }) => {
           // @ts-expect-error Mitt typing doesn't match our usage
@@ -793,9 +753,9 @@ describe(`Query Collections`, () => {
     })
 
     // Create issue collection
-    const issueCollection = new Collection<Issue>({
+    const issueCollection = createCollection<Issue>({
       id: `issue-collection-test-bug`,
-      getId: (item) => item.id,
+      getKey: (item) => item.id,
       sync: {
         sync: ({ begin, write, commit }) => {
           // @ts-expect-error Mitt typing doesn't match our usage
@@ -904,11 +864,7 @@ describe(`Query Collections`, () => {
 
     // Verify optimistic state is immediately reflected
     expect(result.current.state.size).toBe(4)
-    expect(
-      result.current.state.get(
-        `KEY::${result.current.collection.id}/[temp-key,1]`
-      )
-    ).toEqual({
+    expect(result.current.state.get(`[temp-key,1]`)).toEqual({
       _key: `[temp-key,1]`,
       id: `temp-key`,
       name: `John Doe`,
@@ -929,14 +885,8 @@ describe(`Query Collections`, () => {
 
     // Verify the temporary key is replaced by the permanent one
     expect(result.current.state.size).toBe(4)
-    expect(
-      result.current.state.get(
-        `KEY::${result.current.collection.id}/[temp-key,1]`
-      )
-    ).toBeUndefined()
-    expect(
-      result.current.state.get(`KEY::${result.current.collection.id}/[4,1]`)
-    ).toEqual({
+    expect(result.current.state.get(`[temp-key,1]`)).toBeUndefined()
+    expect(result.current.state.get(`[4,1]`)).toEqual({
       _key: `[4,1]`,
       id: `4`,
       name: `John Doe`,

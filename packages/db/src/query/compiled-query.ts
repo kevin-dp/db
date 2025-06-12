@@ -1,7 +1,7 @@
 import { D2, MessageType, MultiSet, output } from "@electric-sql/d2ts"
-import { Effect, batch } from "@tanstack/store"
-import { Collection } from "../collection.js"
+import { createCollection } from "../collection.js"
 import { compileQueryPipeline } from "./pipeline-compiler.js"
+import type { Collection } from "../collection.js"
 import type { ChangeMessage, SyncConfig } from "../types.js"
 import type {
   IStreamBuilder,
@@ -26,7 +26,7 @@ export class CompiledQuery<TResults extends object = Record<string, unknown>> {
   private resultCollection: Collection<TResults>
   public state: `compiled` | `running` | `stopped` = `compiled`
   private version = 0
-  private unsubscribeEffect?: () => void
+  private unsubscribeCallbacks: Array<() => void> = []
 
   constructor(queryBuilder: QueryBuilder<Context<Schema>>) {
     const query = queryBuilder._query
@@ -97,9 +97,9 @@ export class CompiledQuery<TResults extends object = Record<string, unknown>> {
 
     this.graph = graph
     this.inputs = inputs
-    this.resultCollection = new Collection<TResults>({
+    this.resultCollection = createCollection<TResults>({
       id: crypto.randomUUID(), // TODO: remove when we don't require any more
-      getId: (val) => {
+      getKey: (val: unknown) => {
         return (val as any)._key
       },
       sync: {
@@ -115,12 +115,12 @@ export class CompiledQuery<TResults extends object = Record<string, unknown>> {
   private sendChangesToInput(
     inputKey: string,
     changes: Array<ChangeMessage>,
-    getId: (item: ChangeMessage[`value`]) => any
+    getKey: (item: ChangeMessage[`value`]) => any
   ) {
     const input = this.inputs[inputKey]!
     const multiSetArray: MultiSetArray<unknown> = []
     for (const change of changes) {
-      const key = getId(change.value)
+      const key = getKey(change.value)
       if (change.type === `insert`) {
         multiSetArray.push([[key, change.value], 1])
       } else if (change.type === `update`) {
@@ -160,39 +160,29 @@ export class CompiledQuery<TResults extends object = Record<string, unknown>> {
       throw new Error(`Query is stopped`)
     }
 
-    batch(() => {
-      Object.entries(this.inputCollections).forEach(([key, collection]) => {
-        this.sendChangesToInput(
-          key,
-          collection.currentStateAsChanges(),
-          collection.config.getId
-        )
-      })
-      this.incrementVersion()
-      this.sendFrontierToAllInputs()
-      this.runGraph()
+    // Send initial state
+    Object.entries(this.inputCollections).forEach(([key, collection]) => {
+      this.sendChangesToInput(
+        key,
+        collection.currentStateAsChanges(),
+        collection.config.getKey
+      )
     })
+    this.incrementVersion()
+    this.sendFrontierToAllInputs()
+    this.runGraph()
 
-    const changeEffect = new Effect({
-      fn: () => {
-        batch(() => {
-          Object.entries(this.inputCollections).forEach(([key, collection]) => {
-            this.sendChangesToInput(
-              key,
-              collection.derivedChanges.state,
-              collection.config.getId
-            )
-          })
-          this.incrementVersion()
-          this.sendFrontierToAllInputs()
-          this.runGraph()
-        })
-      },
-      deps: Object.values(this.inputCollections).map(
-        (collection) => collection.derivedChanges
-      ),
+    // Subscribe to changes
+    Object.entries(this.inputCollections).forEach(([key, collection]) => {
+      const unsubscribe = collection.subscribeChanges((changes) => {
+        this.sendChangesToInput(key, changes, collection.config.getKey)
+        this.incrementVersion()
+        this.sendFrontierToAllInputs()
+        this.runGraph()
+      })
+
+      this.unsubscribeCallbacks.push(unsubscribe)
     })
-    this.unsubscribeEffect = changeEffect.mount()
 
     this.state = `running`
     return () => {
@@ -201,8 +191,8 @@ export class CompiledQuery<TResults extends object = Record<string, unknown>> {
   }
 
   stop() {
-    this.unsubscribeEffect?.()
-    this.unsubscribeEffect = undefined
+    this.unsubscribeCallbacks.forEach((unsubscribe) => unsubscribe())
+    this.unsubscribeCallbacks = []
     this.state = `stopped`
   }
 }

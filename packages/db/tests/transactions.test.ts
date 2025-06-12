@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { createTransaction } from "../src/transactions"
-import { Collection } from "../src/collection"
+import { createCollection } from "../src/collection"
 
 describe(`Transactions`, () => {
   it(`calling createTransaction creates a transaction`, () => {
@@ -48,13 +48,13 @@ describe(`Transactions`, () => {
       mutationFn: async () => Promise.resolve(),
       autoCommit: false,
     })
-    const collection = new Collection<{
+    const collection = createCollection<{
       id: number
       value: string
       newProp?: string
     }>({
       id: `foo`,
-      getId: (item) => item.id,
+      getKey: (item) => item.id,
       sync: {
         sync: () => {},
       },
@@ -84,24 +84,24 @@ describe(`Transactions`, () => {
       mutationFn: async () => Promise.resolve(),
       autoCommit: false,
     })
-    const collection1 = new Collection<{
+    const collection1 = createCollection<{
       id: number
       value: string
       newProp?: string
     }>({
       id: `foo`,
-      getId: (item) => item.id,
+      getKey: (item) => item.id,
       sync: {
         sync: () => {},
       },
     })
-    const collection2 = new Collection<{
+    const collection2 = createCollection<{
       id: number
       value: string
       newProp?: string
     }>({
       id: `foo2`,
-      getId: (item) => item.id,
+      getKey: (item) => item.id,
       sync: {
         sync: () => {},
       },
@@ -110,12 +110,12 @@ describe(`Transactions`, () => {
     transaction.mutate(() => {
       collection1.insert({
         id: 1,
-        value: `foo-me`,
+        value: `foo-me1`,
         newProp: `something something`,
       })
       collection2.insert({
         id: 1,
-        value: `foo-me`,
+        value: `foo-me2`,
         newProp: `something something`,
       })
     })
@@ -129,13 +129,13 @@ describe(`Transactions`, () => {
       mutationFn: async () => Promise.resolve(),
       autoCommit: false,
     })
-    const collection = new Collection<{
+    const collection = createCollection<{
       id: number
       value: string
       newProp?: string
     }>({
       id: `foo`,
-      getId: (item) => item.id,
+      getKey: (item) => item.id,
       sync: {
         sync: () => {},
       },
@@ -162,13 +162,13 @@ describe(`Transactions`, () => {
       },
       autoCommit: false,
     })
-    const collection = new Collection<{
+    const collection = createCollection<{
       id: number
       value: string
       newProp?: string
     }>({
       id: `foo`,
-      getId: (item) => item.id,
+      getKey: (item) => item.id,
       sync: {
         sync: () => {},
       },
@@ -198,13 +198,13 @@ describe(`Transactions`, () => {
       },
       autoCommit: false,
     })
-    const collection = new Collection<{
+    const collection = createCollection<{
       id: number
       value: string
       newProp?: string
     }>({
       id: `foo`,
-      getId: (item) => item.id,
+      getKey: (item) => item.id,
       sync: {
         sync: () => {},
       },
@@ -239,13 +239,13 @@ describe(`Transactions`, () => {
       mutationFn: async () => Promise.resolve(),
       autoCommit: false,
     })
-    const collection = new Collection<{
+    const collection = createCollection<{
       id: number
       value: string
       newProp?: string
     }>({
       id: `foo`,
-      getId: (val) => val.id,
+      getKey: (val) => val.id,
       sync: {
         sync: () => {},
       },

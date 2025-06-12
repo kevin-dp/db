@@ -9,6 +9,7 @@ import type {
   CollectionConfig,
   MutationFnParams,
   SyncConfig,
+  UtilsRecord,
 } from "@tanstack/db"
 
 export interface QueryCollectionConfig<
@@ -53,7 +54,7 @@ export interface QueryCollectionConfig<
 
   // Standard Collection configuration properties
   id?: string
-  getId: CollectionConfig<TItem>[`getId`]
+  getKey: CollectionConfig<TItem>[`getKey`]
   schema?: CollectionConfig<TItem>[`schema`]
   sync?: CollectionConfig<TItem>[`sync`]
 
@@ -81,10 +82,22 @@ export interface QueryCollectionConfig<
 }
 
 /**
+ * Type for the refetch utility function
+ */
+export type RefetchFn = () => Promise<void>
+
+/**
+ * Query collection utilities type
+ */
+export interface QueryCollectionUtils extends UtilsRecord {
+  refetch: RefetchFn
+}
+
+/**
  * Creates query collection options for use with a standard Collection
  *
  * @param config - Configuration options for the Query collection
- * @returns Object containing collection options and utility functions
+ * @returns Collection options with utilities
  */
 export function queryCollectionOptions<
   TItem extends object,
@@ -92,10 +105,7 @@ export function queryCollectionOptions<
   TQueryKey extends QueryKey = QueryKey,
 >(
   config: QueryCollectionConfig<TItem, TError, TQueryKey>
-): {
-  options: CollectionConfig<TItem>
-  refetch: () => Promise<void>
-} {
+): CollectionConfig<TItem> & { utils: QueryCollectionUtils } {
   const {
     queryKey,
     queryFn,
@@ -105,7 +115,7 @@ export function queryCollectionOptions<
     retry,
     retryDelay,
     staleTime,
-    getId,
+    getKey,
     onInsert,
     onUpdate,
     onDelete,
@@ -126,8 +136,8 @@ export function queryCollectionOptions<
     throw new Error(`[QueryCollection] queryClient must be provided.`)
   }
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  if (!getId) {
-    throw new Error(`[QueryCollection] getId must be provided.`)
+  if (!getKey) {
+    throw new Error(`[QueryCollection] getKey must be provided.`)
   }
 
   const internalSync: SyncConfig<TItem>[`sync`] = (params) => {
@@ -174,11 +184,11 @@ export function queryCollectionOptions<
           return
         }
 
-        const currentSyncedItems = new Map(collection.syncedData.state)
-        const newItemsMap = new Map<string, TItem>()
+        const currentSyncedItems = new Map(collection.syncedData)
+        const newItemsMap = new Map<string | number, TItem>()
         newItemsArray.forEach((item) => {
           try {
-            const key = getId(item)
+            const key = getKey(item)
             newItemsMap.set(key, item)
           } catch (e) {
             console.error(
@@ -254,7 +264,7 @@ export function queryCollectionOptions<
    * Refetch the query data
    * @returns Promise that resolves when the refetch is complete
    */
-  const refetch = async (): Promise<void> => {
+  const refetch: RefetchFn = async (): Promise<void> => {
     console.log(`[QueryCollection] refetch() called for ${String(queryKey)}`)
     try {
       await queryClient.refetchQueries({
@@ -274,7 +284,7 @@ export function queryCollectionOptions<
 
   // Create wrapper handlers for direct persistence operations that handle refetching
   const wrappedOnInsert = onInsert
-    ? async (params: MutationFnParams) => {
+    ? async (params: MutationFnParams<TItem>) => {
         const handlerResult = (await onInsert(params)) ?? {}
         const shouldRefetch =
           (handlerResult as { refetch?: boolean }).refetch !== false
@@ -288,7 +298,7 @@ export function queryCollectionOptions<
     : undefined
 
   const wrappedOnUpdate = onUpdate
-    ? async (params: MutationFnParams) => {
+    ? async (params: MutationFnParams<TItem>) => {
         const handlerResult = (await onUpdate(params)) ?? {}
         const shouldRefetch =
           (handlerResult as { refetch?: boolean }).refetch !== false
@@ -302,7 +312,7 @@ export function queryCollectionOptions<
     : undefined
 
   const wrappedOnDelete = onDelete
-    ? async (params: MutationFnParams) => {
+    ? async (params: MutationFnParams<TItem>) => {
         const handlerResult = (await onDelete(params)) ?? {}
         const shouldRefetch =
           (handlerResult as { refetch?: boolean }).refetch !== false
@@ -316,14 +326,14 @@ export function queryCollectionOptions<
     : undefined
 
   return {
-    options: {
-      ...baseCollectionConfig,
-      getId,
-      sync: { sync: internalSync },
-      onInsert: wrappedOnInsert,
-      onUpdate: wrappedOnUpdate,
-      onDelete: wrappedOnDelete,
+    ...baseCollectionConfig,
+    getKey,
+    sync: { sync: internalSync },
+    onInsert: wrappedOnInsert,
+    onUpdate: wrappedOnUpdate,
+    onDelete: wrappedOnDelete,
+    utils: {
+      refetch,
     },
-    refetch,
   }
 }

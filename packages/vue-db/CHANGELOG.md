@@ -1,5 +1,46 @@
 # @tanstack/vue-db
 
+## 0.0.7
+
+### Patch Changes
+
+- A large refactor of the core `Collection` with: ([#155](https://github.com/TanStack/db/pull/155))
+
+  - a change to not use Store internally and emit fine grade changes with `subscribeChanges` and `subscribeKeyChanges` methods.
+  - changes to the `Collection` api to be more `Map` like for reads, with `get`, `has`, `size`, `entries`, `keys`, and `values`.
+  - renames `config.getId` to `config.getKey` for consistency with the `Map` like api.
+
+- Updated dependencies [[`5c538cf`](https://github.com/TanStack/db/commit/5c538cf03573512a8d1bbde96962a9f7ca014708), [`9553366`](https://github.com/TanStack/db/commit/955336604a286d7992f9506cb1c76ecf150d0432), [`b4602a0`](https://github.com/TanStack/db/commit/b4602a071cb6866bb1338e30d5802220b0d1fc49), [`02adc81`](https://github.com/TanStack/db/commit/02adc813177cbb44ab6245cc9821142e9cf97876), [`06d8ecc`](https://github.com/TanStack/db/commit/06d8eccc5aaabc194c31ea89c9b4191e2aa68180), [`c50cd51`](https://github.com/TanStack/db/commit/c50cd51ac8030b391cd9d84e8cd8b8fb57cb8ca5)]:
+  - @tanstack/db@0.0.8
+
+## 0.0.6
+
+### Patch Changes
+
+- Expose utilities on collection instances ([#161](https://github.com/TanStack/db/pull/161))
+
+  Implemented a utility exposure pattern for TanStack DB collections that allows utility functions to be passed as part of collection options and exposes them under a `.utils` namespace, with full TypeScript typing.
+
+  - Refactored `createCollection` in packages/db/src/collection.ts to accept options with utilities directly
+  - Added `utils` property to CollectionImpl
+  - Added TypeScript types for utility functions and utility records
+  - Changed Collection from a class to a type, updating all usages to use createCollection() instead
+  - Updated Electric/Query implementations
+  - Utilities are now ergonomically accessible under `.utils`
+  - Full TypeScript typing is preserved for both collection data and utilities
+  - API is clean and straightforward - users can call `createCollection(optionsCreator(config))` directly
+  - Zero-boilerplate TypeScript pattern that infers utility types automatically
+
+- Updated dependencies [[`8b43ad3`](https://github.com/TanStack/db/commit/8b43ad305b277560aed660c31cf1409d22ed1e47)]:
+  - @tanstack/db@0.0.7
+
+## 0.0.5
+
+### Patch Changes
+
+- Updated dependencies [[`856be72`](https://github.com/TanStack/db/commit/856be725a6299374a3a97c88b50bd5d7bb94b783), [`0455e27`](https://github.com/TanStack/db/commit/0455e27f50d69b1e1887b841dc2f262f4de4c55d), [`80fdac7`](https://github.com/TanStack/db/commit/80fdac76389ea741f5743bc788df375f63fb767b)]:
+  - @tanstack/db@0.0.6
+
 ## 0.0.4
 
 ### Patch Changes

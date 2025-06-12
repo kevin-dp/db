@@ -130,12 +130,12 @@ const collectionsCache = new Map()
 // Function to create the appropriate todo collection based on type
 const createTodoCollection = (type: CollectionType) => {
   if (collectionsCache.has(`todo`)) {
-    return collectionsCache.get(`todo`)
+    return collectionsCache.get(`todo`) as Collection<UpdateTodo>
   } else {
-    let newCollection: Collection
+    let newCollection: Collection<UpdateTodo>
     if (type === CollectionType.Electric) {
-      newCollection = createCollection<UpdateTodo>(
-        electricCollectionOptions({
+      newCollection = createCollection(
+        electricCollectionOptions<UpdateTodo>({
           id: `todos`,
           shapeOptions: {
             url: `http://localhost:3003/v1/shape`,
@@ -147,7 +147,7 @@ const createTodoCollection = (type: CollectionType) => {
               timestamptz: (date: string) => new Date(date),
             },
           },
-          getId: (item) => item.id,
+          getKey: (item) => item.id!,
           schema: updateTodoSchema,
           onInsert: async ({ transaction }) => {
             const modified = transaction.mutations[0].modified
@@ -179,7 +179,7 @@ const createTodoCollection = (type: CollectionType) => {
 
             return { txid: String(txids[0].txid) }
           },
-        }).options
+        })
       )
     } else {
       // Query collection using our API helper
@@ -201,7 +201,7 @@ const createTodoCollection = (type: CollectionType) => {
                 : undefined,
             }))
           },
-          getId: (item: UpdateTodo) => String(item.id),
+          getKey: (item: UpdateTodo) => item.id!,
           schema: updateTodoSchema,
           queryClient,
           onInsert: async ({ transaction }) => {
@@ -220,11 +220,11 @@ const createTodoCollection = (type: CollectionType) => {
             return await Promise.all(
               transaction.mutations.map(async (mutation) => {
                 const { original } = mutation
-                const response = await api.todos.delete(original.id)
+                await api.todos.delete(original.id)
               })
             )
           },
-        }).options
+        })
       )
     }
     collectionsCache.set(`todo`, newCollection)
@@ -237,7 +237,7 @@ const createConfigCollection = (type: CollectionType) => {
   if (collectionsCache.has(`config`)) {
     return collectionsCache.get(`config`)
   } else {
-    let newCollection: Collection
+    let newCollection: Collection<UpdateConfig>
     if (type === CollectionType.Electric) {
       newCollection = createCollection(
         electricCollectionOptions({
@@ -254,7 +254,7 @@ const createConfigCollection = (type: CollectionType) => {
               },
             },
           },
-          getId: (item: UpdateConfig) => item.id,
+          getKey: (item: UpdateConfig) => item.id!,
           schema: updateConfigSchema,
           onInsert: async ({ transaction }) => {
             const modified = transaction.mutations[0].modified
@@ -275,7 +275,7 @@ const createConfigCollection = (type: CollectionType) => {
 
             return { txid: String(txids[0]) }
           },
-        }).options
+        })
       )
     } else {
       // Query collection using our API helper
@@ -297,7 +297,7 @@ const createConfigCollection = (type: CollectionType) => {
                 : undefined,
             }))
           },
-          getId: (item: UpdateConfig) => item.id,
+          getKey: (item: UpdateConfig) => item.id,
           schema: updateConfigSchema,
           queryClient,
           onInsert: async ({ transaction }) => {
@@ -319,7 +319,7 @@ const createConfigCollection = (type: CollectionType) => {
 
             return { txid: String(txids[0]) }
           },
-        }).options
+        })
       )
     }
     collectionsCache.set(`config`, newCollection)
@@ -346,7 +346,7 @@ export default function App() {
   // Always call useLiveQuery hooks
   const { data: todos } = useLiveQuery((q) =>
     q
-      .from({ todoCollection: todoCollection as Collection<UpdateTodo> })
+      .from({ todoCollection: todoCollection })
       .orderBy(`@created_at`)
       .select(`@id`, `@created_at`, `@text`, `@completed`)
   )
@@ -462,6 +462,7 @@ export default function App() {
   }
 
   const toggleTodo = (todo: UpdateTodo) => {
+    console.log(todoCollection)
     todoCollection.update(todo.id, (draft) => {
       draft.completed = !draft.completed
     })
