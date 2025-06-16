@@ -823,6 +823,59 @@ describe(`Query Collections`, () => {
     { timeout: 250_000 }
   )
 
+  it(`should support aggregate functions in select`, async () => {
+    const emitter = mitt()
+
+    // Create collection with mutation capability
+    const collection = createCollection<Person>({
+      id: `select-aggregates-test`,
+      getKey: (item) => item.id,
+      sync: {
+        sync: ({ begin, write, commit }) => {
+          emitter.on(`sync`, (changes) => {
+            begin()
+            ;(changes as Array<PendingMutation>).forEach((change) => {
+              write({
+                type: change.type,
+                value: change.changes as Person,
+              })
+            })
+            commit()
+          })
+        },
+      },
+    })
+
+    // Sync from initial state
+    emitter.emit(
+      `sync`,
+      initialPersons.map((person) => ({
+        type: `insert`,
+        changes: person,
+      }))
+    )
+
+    const aggregateQuery = queryBuilder()
+      .from({ collection })
+      .orderBy(`@id`)
+      .select({
+        rows: { COUNT: `@id` },
+        avg_age: { AVG: `@age` },
+      })
+      .limit(1)
+
+    const compiledAggregateQuery = compileQuery(aggregateQuery)
+    compiledAggregateQuery.start()
+
+    const aggregateResults = compiledAggregateQuery.results
+
+    await waitForChanges()
+
+    // Verify result of the aggregate functions
+    const [res] = Array.from(aggregateResults.toArray)
+    expect(res).toEqual({ rows: 3, avg_age: 30 })
+  })
+
   it(`should maintain correct ordering when items are added, updated, or deleted`, async () => {
     const emitter = mitt()
 
