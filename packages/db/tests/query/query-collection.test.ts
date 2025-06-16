@@ -692,191 +692,186 @@ describe(`Query Collections`, () => {
     expect(result.state.get(`[3,1]`)).toBeUndefined()
   })
 
-  it(
-    `should order results by specified fields`,
-    async () => {
-      const emitter = mitt()
+  it(`should order results by specified fields`, async () => {
+    const emitter = mitt()
 
-      // Create collection with mutation capability
-      const collection = createCollection<Person>({
-        id: `order-by-test`,
-        getKey: (item) => item.id,
-        sync: {
-          sync: ({ begin, write, commit }) => {
-            emitter.on(`sync`, (changes) => {
-              begin()
-              ;(changes as Array<PendingMutation>).forEach((change) => {
-                write({
-                  type: change.type,
-                  value: change.changes as Person,
-                })
+    // Create collection with mutation capability
+    const collection = createCollection<Person>({
+      id: `order-by-test`,
+      getKey: (item) => item.id,
+      sync: {
+        sync: ({ begin, write, commit }) => {
+          emitter.on(`sync`, (changes) => {
+            begin()
+            ;(changes as Array<PendingMutation>).forEach((change) => {
+              write({
+                type: change.type,
+                value: change.changes as Person,
               })
-              commit()
             })
-          },
+            commit()
+          })
         },
-      })
+      },
+    })
 
-      // Sync from initial state
-      emitter.emit(
-        `sync`,
-        initialPersons.map((person) => ({
-          type: `insert`,
-          changes: person,
-        }))
-      )
+    // Sync from initial state
+    emitter.emit(
+      `sync`,
+      initialPersons.map((person) => ({
+        type: `insert`,
+        changes: person,
+      }))
+    )
 
-      // Test ascending order by age
-      const ascendingQuery = queryBuilder()
-        .from({ collection })
-        .orderBy(`@age`)
-        .select(`@id`, `@name`, `@age`)
+    // Test ascending order by age
+    const ascendingQuery = queryBuilder()
+      .from({ collection })
+      .orderBy(`@age`)
+      .select(`@id`, `@name`, `@age`)
 
-      const compiledAscendingQuery = compileQuery(ascendingQuery)
-      compiledAscendingQuery.start()
+    const compiledAscendingQuery = compileQuery(ascendingQuery)
+    compiledAscendingQuery.start()
 
-      const ascendingResult = compiledAscendingQuery.results
+    const ascendingResult = compiledAscendingQuery.results
 
-      await waitForChanges()
+    await waitForChanges()
 
-      // Verify ascending order
-      const ascendingArray = Array.from(ascendingResult.toArray)
-      expect(ascendingArray).toEqual([
-        { _key: `2`, id: `2`, name: `Jane Doe`, age: 25, _orderByIndex: 0 },
-        { _key: `1`, id: `1`, name: `John Doe`, age: 30, _orderByIndex: 1 },
-        { _key: `3`, id: `3`, name: `John Smith`, age: 35, _orderByIndex: 2 },
-      ])
+    // Verify ascending order
+    const ascendingArray = Array.from(ascendingResult.toArray)
+    expect(ascendingArray).toEqual([
+      { _key: `2`, id: `2`, name: `Jane Doe`, age: 25, _orderByIndex: 0 },
+      { _key: `1`, id: `1`, name: `John Doe`, age: 30, _orderByIndex: 1 },
+      { _key: `3`, id: `3`, name: `John Smith`, age: 35, _orderByIndex: 2 },
+    ])
 
-      // Test descending order by age
-      const descendingQuery = queryBuilder()
-        .from({ collection })
-        .orderBy({ "@age": `desc` })
-        .select(`@id`, `@name`, `@age`)
+    // Test descending order by age
+    const descendingQuery = queryBuilder()
+      .from({ collection })
+      .orderBy({ "@age": `desc` })
+      .select(`@id`, `@name`, `@age`)
 
-      const compiledDescendingQuery = compileQuery(descendingQuery)
-      compiledDescendingQuery.start()
+    const compiledDescendingQuery = compileQuery(descendingQuery)
+    compiledDescendingQuery.start()
 
-      const descendingResult = compiledDescendingQuery.results
+    const descendingResult = compiledDescendingQuery.results
 
-      await waitForChanges()
+    await waitForChanges()
 
-      // Verify descending order
-      const descendingArray = Array.from(descendingResult.toArray)
-      expect(descendingArray).toEqual([
-        { _key: `3`, id: `3`, name: `John Smith`, age: 35, _orderByIndex: 0 },
-        { _key: `1`, id: `1`, name: `John Doe`, age: 30, _orderByIndex: 1 },
-        { _key: `2`, id: `2`, name: `Jane Doe`, age: 25, _orderByIndex: 2 },
-      ])
+    // Verify descending order
+    const descendingArray = Array.from(descendingResult.toArray)
+    expect(descendingArray).toEqual([
+      { _key: `3`, id: `3`, name: `John Smith`, age: 35, _orderByIndex: 0 },
+      { _key: `1`, id: `1`, name: `John Doe`, age: 30, _orderByIndex: 1 },
+      { _key: `2`, id: `2`, name: `Jane Doe`, age: 25, _orderByIndex: 2 },
+    ])
 
-      // Test descending order by name
-      const descendingNameQuery = queryBuilder()
-        .from({ collection })
-        .orderBy({ "@name": `desc` })
-        .select(`@id`, `@name`, `@age`)
+    // Test descending order by name
+    const descendingNameQuery = queryBuilder()
+      .from({ collection })
+      .orderBy({ "@name": `desc` })
+      .select(`@id`, `@name`, `@age`)
 
-      const compiledDescendingNameQuery = compileQuery(descendingNameQuery)
-      compiledDescendingNameQuery.start()
+    const compiledDescendingNameQuery = compileQuery(descendingNameQuery)
+    compiledDescendingNameQuery.start()
 
-      const descendingNameResult = compiledDescendingNameQuery.results
+    const descendingNameResult = compiledDescendingNameQuery.results
 
-      await waitForChanges()
+    await waitForChanges()
 
-      // Verify descending order by name
-      const descendingNameArray = Array.from(descendingNameResult.toArray)
-      expect(descendingNameArray).toEqual([
-        { _key: `3`, id: `3`, name: `John Smith`, age: 35, _orderByIndex: 0 },
-        { _key: `1`, id: `1`, name: `John Doe`, age: 30, _orderByIndex: 1 },
-        { _key: `2`, id: `2`, name: `Jane Doe`, age: 25, _orderByIndex: 2 },
-      ])
+    // Verify descending order by name
+    const descendingNameArray = Array.from(descendingNameResult.toArray)
+    expect(descendingNameArray).toEqual([
+      { _key: `3`, id: `3`, name: `John Smith`, age: 35, _orderByIndex: 0 },
+      { _key: `1`, id: `1`, name: `John Doe`, age: 30, _orderByIndex: 1 },
+      { _key: `2`, id: `2`, name: `Jane Doe`, age: 25, _orderByIndex: 2 },
+    ])
 
-      // Test reverse chronological order by createdAt
-      const reverseChronologicalQuery = queryBuilder()
-        .from({ collection })
-        .orderBy({ "@createdAt": `desc` })
-        .select(`@id`, `@name`, `@createdAt`)
+    // Test reverse chronological order by createdAt
+    const reverseChronologicalQuery = queryBuilder()
+      .from({ collection })
+      .orderBy({ "@createdAt": `desc` })
+      .select(`@id`, `@name`, `@createdAt`)
 
-      const compiledReverseChronologicalQuery = compileQuery(
-        reverseChronologicalQuery
-      )
-      compiledReverseChronologicalQuery.start()
+    const compiledReverseChronologicalQuery = compileQuery(
+      reverseChronologicalQuery
+    )
+    compiledReverseChronologicalQuery.start()
 
-      const reverseChronologicalResult =
-        compiledReverseChronologicalQuery.results
+    const reverseChronologicalResult = compiledReverseChronologicalQuery.results
 
-      await waitForChanges()
+    await waitForChanges()
 
-      // Verify reverse chronological order
-      const reverseChronologicalArray = Array.from(
-        reverseChronologicalResult.toArray
-      )
-      expect(reverseChronologicalArray).toEqual([
-        {
-          _key: `3`,
-          id: `3`,
-          name: `John Smith`,
-          createdAt: new Date(`2024-01-03`),
-          _orderByIndex: 0,
-        },
-        {
-          _key: `1`,
-          id: `1`,
-          name: `John Doe`,
-          createdAt: new Date(`2024-01-02`),
-          _orderByIndex: 1,
-        },
-        {
-          _key: `2`,
-          id: `2`,
-          name: `Jane Doe`,
-          createdAt: new Date(`2024-01-01`),
-          _orderByIndex: 2,
-        },
-      ])
+    // Verify reverse chronological order
+    const reverseChronologicalArray = Array.from(
+      reverseChronologicalResult.toArray
+    )
+    expect(reverseChronologicalArray).toEqual([
+      {
+        _key: `3`,
+        id: `3`,
+        name: `John Smith`,
+        createdAt: new Date(`2024-01-03`),
+        _orderByIndex: 0,
+      },
+      {
+        _key: `1`,
+        id: `1`,
+        name: `John Doe`,
+        createdAt: new Date(`2024-01-02`),
+        _orderByIndex: 1,
+      },
+      {
+        _key: `2`,
+        id: `2`,
+        name: `Jane Doe`,
+        createdAt: new Date(`2024-01-01`),
+        _orderByIndex: 2,
+      },
+    ])
 
-      // Test multiple order by fields
-      const multiOrderQuery = queryBuilder()
-        .from({ collection })
-        .orderBy([`@isActive`, { "@name": `desc` }])
-        .select(`@id`, `@name`, `@age`, `@isActive`)
+    // Test multiple order by fields
+    const multiOrderQuery = queryBuilder()
+      .from({ collection })
+      .orderBy([`@isActive`, { "@name": `desc` }])
+      .select(`@id`, `@name`, `@age`, `@isActive`)
 
-      const compiledMultiOrderQuery = compileQuery(multiOrderQuery)
-      compiledMultiOrderQuery.start()
+    const compiledMultiOrderQuery = compileQuery(multiOrderQuery)
+    compiledMultiOrderQuery.start()
 
-      const multiOrderResult = compiledMultiOrderQuery.results
+    const multiOrderResult = compiledMultiOrderQuery.results
 
-      await waitForChanges()
+    await waitForChanges()
 
-      // Verify multiple field ordering
-      const multiOrderArray = Array.from(multiOrderResult.toArray)
-      expect(multiOrderArray).toEqual([
-        {
-          _key: `3`,
-          id: `3`,
-          name: `John Smith`,
-          age: 35,
-          isActive: false,
-          _orderByIndex: 0,
-        },
-        {
-          _key: `1`,
-          id: `1`,
-          name: `John Doe`,
-          age: 30,
-          isActive: true,
-          _orderByIndex: 1,
-        },
-        {
-          _key: `2`,
-          id: `2`,
-          name: `Jane Doe`,
-          age: 25,
-          isActive: true,
-          _orderByIndex: 2,
-        },
-      ])
-    },
-    { timeout: 250_000 }
-  )
+    // Verify multiple field ordering
+    const multiOrderArray = Array.from(multiOrderResult.toArray)
+    expect(multiOrderArray).toEqual([
+      {
+        _key: `3`,
+        id: `3`,
+        name: `John Smith`,
+        age: 35,
+        isActive: false,
+        _orderByIndex: 0,
+      },
+      {
+        _key: `1`,
+        id: `1`,
+        name: `John Doe`,
+        age: 30,
+        isActive: true,
+        _orderByIndex: 1,
+      },
+      {
+        _key: `2`,
+        id: `2`,
+        name: `Jane Doe`,
+        age: 25,
+        isActive: true,
+        _orderByIndex: 2,
+      },
+    ])
+  })
 
   it(`should maintain correct ordering when items are added, updated, or deleted`, async () => {
     const emitter = mitt()
