@@ -12,6 +12,7 @@ type Person = {
   age: number | null
   email: string
   isActive: boolean
+  createdAt?: Date
 }
 
 type Issue = {
@@ -28,6 +29,7 @@ const initialPersons: Array<Person> = [
     age: 30,
     email: `john.doe@example.com`,
     isActive: true,
+    createdAt: new Date(`2024-01-02`),
   },
   {
     id: `2`,
@@ -35,6 +37,7 @@ const initialPersons: Array<Person> = [
     age: 25,
     email: `jane.doe@example.com`,
     isActive: true,
+    createdAt: new Date(`2024-01-01`),
   },
   {
     id: `3`,
@@ -42,6 +45,7 @@ const initialPersons: Array<Person> = [
     age: 35,
     email: `john.smith@example.com`,
     isActive: false,
+    createdAt: new Date(`2024-01-03`),
   },
 ]
 
@@ -234,6 +238,7 @@ describe(`Query Collections`, () => {
       id: `3`,
       isActive: false,
       name: `John Smith`,
+      createdAt: new Date(`2024-01-03`),
     })
 
     // Insert a new person
@@ -261,6 +266,7 @@ describe(`Query Collections`, () => {
       id: `3`,
       isActive: false,
       name: `John Smith`,
+      createdAt: new Date(`2024-01-03`),
     })
     expect(result.state.get(`4`)).toEqual({
       _key: `4`,
@@ -565,6 +571,7 @@ describe(`Query Collections`, () => {
         id: `1`,
         isActive: true,
         name: `John Doe`,
+        createdAt: new Date(`2024-01-02`),
       },
     })
 
@@ -582,6 +589,7 @@ describe(`Query Collections`, () => {
         id: `2`,
         isActive: true,
         name: `Jane Doe`,
+        createdAt: new Date(`2024-01-01`),
       },
     })
 
@@ -599,6 +607,7 @@ describe(`Query Collections`, () => {
         id: `1`,
         isActive: true,
         name: `John Doe`,
+        createdAt: new Date(`2024-01-02`),
       },
     })
 
@@ -633,6 +642,7 @@ describe(`Query Collections`, () => {
         id: `2`,
         isActive: true,
         name: `Jane Doe`,
+        createdAt: new Date(`2024-01-01`),
       },
     })
 
@@ -664,6 +674,7 @@ describe(`Query Collections`, () => {
         id: `2`,
         isActive: true,
         name: `Jane Doe`,
+        createdAt: new Date(`2024-01-01`),
       },
     })
 
@@ -776,6 +787,50 @@ describe(`Query Collections`, () => {
         { _key: `3`, id: `3`, name: `John Smith`, age: 35, _orderByIndex: 0 },
         { _key: `1`, id: `1`, name: `John Doe`, age: 30, _orderByIndex: 1 },
         { _key: `2`, id: `2`, name: `Jane Doe`, age: 25, _orderByIndex: 2 },
+      ])
+
+      // Test reverse chronological order by createdAt
+      const reverseChronologicalQuery = queryBuilder()
+        .from({ collection })
+        .orderBy({ "@createdAt": `desc` })
+        .select(`@id`, `@name`, `@createdAt`)
+
+      const compiledReverseChronologicalQuery = compileQuery(
+        reverseChronologicalQuery
+      )
+      compiledReverseChronologicalQuery.start()
+
+      const reverseChronologicalResult =
+        compiledReverseChronologicalQuery.results
+
+      await waitForChanges()
+
+      // Verify reverse chronological order
+      const reverseChronologicalArray = Array.from(
+        reverseChronologicalResult.toArray
+      )
+      expect(reverseChronologicalArray).toEqual([
+        {
+          _key: `3`,
+          id: `3`,
+          name: `John Smith`,
+          createdAt: new Date(`2024-01-03`),
+          _orderByIndex: 0,
+        },
+        {
+          _key: `1`,
+          id: `1`,
+          name: `John Doe`,
+          createdAt: new Date(`2024-01-02`),
+          _orderByIndex: 1,
+        },
+        {
+          _key: `2`,
+          id: `2`,
+          name: `Jane Doe`,
+          createdAt: new Date(`2024-01-01`),
+          _orderByIndex: 2,
+        },
       ])
 
       // Test multiple order by fields
