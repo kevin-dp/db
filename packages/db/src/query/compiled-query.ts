@@ -114,10 +114,27 @@ export class CompiledQuery<TResults extends object = Record<string, unknown>> {
 
     this.graph = graph
     this.inputs = inputs
+
+    const compare = query.orderBy
+      ? (val1: TResults, val2: TResults) => {
+          // The query builder always adds an _orderByIndex property if the results are ordered
+          const x = val1 as TResults & { _orderByIndex: number }
+          const y = val2 as TResults & { _orderByIndex: number }
+          if (x._orderByIndex < y._orderByIndex) {
+            return -1
+          } else if (x._orderByIndex > y._orderByIndex) {
+            return 1
+          } else {
+            return 0
+          }
+        }
+      : undefined
+
     this.resultCollection = createCollection<TResults>({
       getKey: (val: unknown) => {
         return (val as any)._key
       },
+      compare,
       sync: {
         sync: sync as unknown as (params: {
           collection: Collection<
