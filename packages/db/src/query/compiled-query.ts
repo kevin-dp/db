@@ -1,6 +1,7 @@
 import { D2, MultiSet, output } from "@electric-sql/d2mini"
 import { createCollection } from "../collection.js"
 import { compileQueryPipeline } from "./pipeline-compiler.js"
+import type { StandardSchemaV1 } from "@standard-schema/spec"
 import type { Collection } from "../collection.js"
 import type { ChangeMessage, ResolveType, SyncConfig } from "../types.js"
 import type {
@@ -116,7 +117,14 @@ export class CompiledQuery<TResults extends object = Record<string, unknown>> {
     this.inputs = inputs
 
     const compare = query.orderBy
-      ? (val1: TResults, val2: TResults) => {
+      ? (
+          val1: ResolveType<
+            TResults,
+            StandardSchemaV1,
+            Record<string, unknown>
+          >,
+          val2: ResolveType<TResults, StandardSchemaV1, Record<string, unknown>>
+        ): number => {
           // The query builder always adds an _orderByIndex property if the results are ordered
           const x = val1 as TResults & { _orderByIndex: number }
           const y = val2 as TResults & { _orderByIndex: number }
