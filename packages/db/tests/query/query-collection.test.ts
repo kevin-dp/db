@@ -837,7 +837,7 @@ describe(`Query Collections`, () => {
     await waitForChanges()
 
     // Verify ascending order
-    const ascendingArray = Array.from(ascendingResult.toArray)
+    const ascendingArray = Array.from(ascendingResult.toArray).map(stripIndex)
     expect(ascendingArray).toEqual([
       { _key: `2`, id: `2`, name: `Jane Doe`, age: 25 },
       { _key: `1`, id: `1`, name: `John Doe`, age: 30 },
@@ -858,7 +858,7 @@ describe(`Query Collections`, () => {
     await waitForChanges()
 
     // Verify descending order
-    const descendingArray = Array.from(descendingResult.toArray)
+    const descendingArray = Array.from(descendingResult.toArray).map(stripIndex)
     expect(descendingArray).toEqual([
       { _key: `3`, id: `3`, name: `John Smith`, age: 35 },
       { _key: `1`, id: `1`, name: `John Doe`, age: 30 },
@@ -879,7 +879,9 @@ describe(`Query Collections`, () => {
     await waitForChanges()
 
     // Verify descending order by name
-    const descendingNameArray = Array.from(descendingNameResult.toArray)
+    const descendingNameArray = Array.from(descendingNameResult.toArray).map(
+      stripIndex
+    )
     expect(descendingNameArray).toEqual([
       { _key: `3`, id: `3`, name: `John Smith`, age: 35 },
       { _key: `1`, id: `1`, name: `John Doe`, age: 30 },
@@ -904,7 +906,7 @@ describe(`Query Collections`, () => {
     // Verify reverse chronological order
     const reverseChronologicalArray = Array.from(
       reverseChronologicalResult.toArray
-    )
+    ).map(stripIndex)
     expect(reverseChronologicalArray).toEqual([
       {
         _key: `3`,
@@ -940,7 +942,7 @@ describe(`Query Collections`, () => {
     await waitForChanges()
 
     // Verify multiple field ordering
-    const multiOrderArray = Array.from(multiOrderResult.toArray)
+    const multiOrderArray = Array.from(multiOrderResult.toArray).map(stripIndex)
     expect(multiOrderArray).toEqual([
       {
         _key: `3`,
@@ -1010,7 +1012,7 @@ describe(`Query Collections`, () => {
     await waitForChanges()
 
     // Verify initial ordering
-    let currentOrder = Array.from(compiledQuery.results.toArray)
+    let currentOrder = Array.from(compiledQuery.results.toArray).map(stripIndex)
     expect(currentOrder).toEqual([
       { _key: `2`, id: `2`, name: `Jane Doe`, age: 25 },
       { _key: `1`, id: `1`, name: `John Doe`, age: 30 },
@@ -1034,7 +1036,7 @@ describe(`Query Collections`, () => {
     await waitForChanges()
 
     // Verify order is updated with the new person at the beginning
-    currentOrder = Array.from(compiledQuery.results.toArray)
+    currentOrder = Array.from(compiledQuery.results.toArray).map(stripIndex)
     expect(currentOrder).toEqual([
       { _key: `4`, id: `4`, name: `Alice Young`, age: 22 },
       { _key: `2`, id: `2`, name: `Jane Doe`, age: 25 },
@@ -1056,7 +1058,7 @@ describe(`Query Collections`, () => {
     await waitForChanges()
 
     // Verify order is updated with John Doe now at the end
-    currentOrder = Array.from(compiledQuery.results.toArray)
+    currentOrder = Array.from(compiledQuery.results.toArray).map(stripIndex)
     expect(currentOrder).toEqual([
       { _key: `4`, id: `4`, name: `Alice Young`, age: 22 },
       { _key: `2`, id: `2`, name: `Jane Doe`, age: 25 },
@@ -1081,7 +1083,7 @@ describe(`Query Collections`, () => {
     await waitForChanges()
 
     // Verify order is updated with Bob Null at the end
-    currentOrder = Array.from(compiledQuery.results.toArray)
+    currentOrder = Array.from(compiledQuery.results.toArray).map(stripIndex)
     expect(currentOrder).toEqual([
       { _key: `5`, id: `5`, name: `Bob Null`, age: null },
       { _key: `4`, id: `4`, name: `Alice Young`, age: 22 },
@@ -1101,7 +1103,7 @@ describe(`Query Collections`, () => {
     await waitForChanges()
 
     // Verify order is updated with John Smith removed
-    currentOrder = Array.from(compiledQuery.results.toArray)
+    currentOrder = Array.from(compiledQuery.results.toArray).map(stripIndex)
     expect(currentOrder).toEqual([
       { _key: `5`, id: `5`, name: `Bob Null`, age: null },
       { _key: `4`, id: `4`, name: `Alice Young`, age: 22 },
@@ -1384,4 +1386,11 @@ describe(`Query Collections`, () => {
 
 async function waitForChanges(ms = 0) {
   await new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function stripIndex<T>(v: T): T {
+  const { _orderByIndex, ...copy } = v as T & {
+    _orderByIndex?: number | string
+  }
+  return copy as T
 }
