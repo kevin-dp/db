@@ -498,7 +498,10 @@ export class CollectionImpl<
     for (const key of this.keys()) {
       const value = this.get(key)
       if (value !== undefined) {
-        yield value
+        const { _orderByIndex, ...copy } = value as T & {
+          _orderByIndex?: number | string
+        }
+        yield copy as T
       }
     }
   }
@@ -510,7 +513,10 @@ export class CollectionImpl<
     for (const key of this.keys()) {
       const value = this.get(key)
       if (value !== undefined) {
-        yield [key, value]
+        const { _orderByIndex, ...copy } = value as T & {
+          _orderByIndex?: number | string
+        }
+        yield [key, copy as T]
       }
     }
   }
