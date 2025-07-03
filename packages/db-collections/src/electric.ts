@@ -31,16 +31,15 @@ type InferSchemaOutput<T> = T extends StandardSchemaV1
   : Record<string, unknown>
 
 type ResolveType<
-  TExplicit,
+  TExplicit extends Row<unknown> = Row<unknown>,
   TSchema extends StandardSchemaV1 = never,
   TFallback extends object = Record<string, unknown>,
-> = unknown extends TExplicit
-  ? [TSchema] extends [never]
-    ? TFallback
-    : InferSchemaOutput<TSchema>
-  : TExplicit extends object
-    ? TExplicit
-    : Record<string, unknown>
+> =
+  unknown extends GetExtensions<TExplicit>
+    ? [TSchema] extends [never]
+      ? TFallback
+      : InferSchemaOutput<TSchema>
+    : TExplicit
 
 /**
  * Configuration interface for Electric collection options
