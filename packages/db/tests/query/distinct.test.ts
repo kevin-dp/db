@@ -177,14 +177,13 @@ describe(`Query DISTINCT Execution`, () => {
       expect(combinations.length).toBe(4)
     })
 
-    test(`distinct without select`, () => {
-      const distinctUsers = createLiveQueryCollection({
-        startSync: true,
-        query: (q) => q.from({ users: usersCollection }).distinct(),
-      })
-
-      expect(distinctUsers.size).toBe(8)
-      expect(Array.from(distinctUsers.values())).toEqual(sampleUsers)
+    test(`distinct without select should throw`, () => {
+      expect(() =>
+        createLiveQueryCollection({
+          startSync: true,
+          query: (q) => q.from({ users: usersCollection }).distinct(),
+        })
+      ).toThrow(`DISTINCT requires a SELECT clause.`)
     })
   })
 

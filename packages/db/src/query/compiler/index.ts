@@ -98,6 +98,10 @@ export function compileQuery(
     }
   }
 
+  if (query.distinct && !query.fnSelect && !query.select) {
+    throw new Error(`DISTINCT requires a SELECT clause.`)
+  }
+
   // Process the SELECT clause early - always create __select_results
   // This eliminates duplication and allows for DISTINCT implementation
   if (query.fnSelect) {
