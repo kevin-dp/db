@@ -196,7 +196,7 @@ export class CollectionStateManager<
   private getVirtualPropsSnapshotForState(
     key: TKey,
     options?: {
-      rowOrigins?: ReadonlyMap<TKey, VirtualOrigin>
+      rowOrigins?: Pick<ReadonlyMap<TKey, VirtualOrigin>, 'get'>
       optimisticUpserts?: Pick<Map<TKey, unknown>, 'has'>
       optimisticDeletes?: Pick<Set<TKey>, 'has'>
       completedOptimisticKeys?: Pick<Map<TKey, unknown>, 'has'>
@@ -476,7 +476,9 @@ export class CollectionStateManager<
 
     const previousState = new Map(this.optimisticUpserts)
     const previousDeletes = new Set(this.optimisticDeletes)
-    const previousRowOrigins = new Map(this.rowOrigins)
+    // rowOrigins is not mutated anywhere in this method, so the live map IS the
+    // previous state; cloning it here would be O(collection size) on every write.
+    const previousRowOrigins = this.rowOrigins
 
     // Update pending optimistic state for completed/failed transactions
     for (const transaction of this.transactions.values()) {
@@ -857,7 +859,25 @@ export class CollectionStateManager<
       // Set flag to prevent redundant optimistic state recalculations
       this.isCommittingSyncTransactions = true
 
-      const previousRowOrigins = new Map(this.rowOrigins)
+      // Copy-on-write snapshot of rowOrigins: cloning the whole map here is
+      // O(collection size) on every commit, so instead record the prior value
+      // for just the keys this commit mutates. Lookups fall through to the
+      // live map for untouched keys.
+      const rowOriginOverrides = new Map<TKey, VirtualOrigin | undefined>()
+      const captureRowOrigin = (key: TKey) => {
+        if (!rowOriginOverrides.has(key)) {
+          rowOriginOverrides.set(key, this.rowOrigins.get(key))
+        }
+      }
+      const previousRowOrigins: Pick<
+        ReadonlyMap<TKey, VirtualOrigin>,
+        'get'
+      > = {
+        get: (key: TKey) =>
+          rowOriginOverrides.has(key)
+            ? rowOriginOverrides.get(key)
+            : this.rowOrigins.get(key),
+      }
       const previousOptimisticUpserts = new Map(this.optimisticUpserts)
       const previousOptimisticDeletes = new Set(this.optimisticDeletes)
 
@@ -947,6 +967,11 @@ export class CollectionStateManager<
           this.syncedData.clear()
           this.syncedMetadata.clear()
           this.syncedKeys.clear()
+          // Truncate clears the whole rowOrigins map, so capture every prior
+          // origin (truncate is already O(collection size), unlike normal commits)
+          for (const key of this.rowOrigins.keys()) {
+            captureRowOrigin(key)
+          }
           this.clearOriginTrackingState()
 
           // 3) Clear currentVisibleState for truncated keys to ensure subsequent operations
@@ -966,6 +991,7 @@ export class CollectionStateManager<
         for (const operation of transaction.operations) {
           const key = operation.key as TKey
           this.syncedKeys.add(key)
+          captureRowOrigin(key)
 
           // Determine origin: 'local' for local-only collections or pending local changes
           const origin: VirtualOrigin =
